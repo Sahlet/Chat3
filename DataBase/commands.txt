@@ -1,0 +1,699 @@
+drop database my_chat;
+create database if not exists my_chat;
+USE my_chat;
+-- comment
+#comment
+/*comment*/
+
+-- --------------------------------------------------------------------------------------
+create table if not exists my_chat.users(
+	id SERIAL PRIMARY KEY,				-- SERIAL = BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE
+	log VARCHAR(40) NOT NULL UNIQUE, -- UNIQUE - не повторяестя значение этого поля в каждой строке
+	pass VARCHAR(40) NOT NULL,
+	status VARCHAR(255) NOT NULL DEFAULT '', -- статус
+	last_tick TIMESTAMP NOT NULL,	-- если не задать значение, то в переменной будет храниться время изменения (добавления) записи в диапазоне от «1970-01-01 00:00:00» до некоторой даты в 2038 г, ДЛЯ ОБНОВЛЕНИЯ ВРЕМЕНИ ИСПОЛЬЗУЙ ФУНКЦИЮ NOW() или CURRENT_TIMESTAMP //insert into dt1 values(now());
+	unread_private_chats BOOL NOT NULL DEFAULT FALSE, -- пользоваетль проверяет, есть ли что-то непрочитанное (значение меняется автоматически)
+	unread_chats BOOL NOT NULL DEFAULT FALSE,
+	request BOOL NOT NULL DEFAULT FALSE,
+	n_unread_private_chats BIGINT UNSIGNED NOT NULL DEFAULT 0, -- количество непросмотренных записей
+	n_unread_chats BIGINT UNSIGNED NOT NULL DEFAULT 0,
+	n_request BIGINT UNSIGNED NOT NULL DEFAULT 0,
+	n_created_chats BIGINT UNSIGNED NOT NULL DEFAULT 0, -- количество созданых чатов.
+	-- name VARCHAR(20),
+	INDEX(log)
+	-- ,INDEX(name)
+)ENGINE InnoDB CHARACTER SET utf8;
+-- --------------------------------------------------------------------------------------
+
+-- --------------------------------------------------------------------------------------
+-- список ссылок на сообщения (такая таблица нужна, чтоб знать, каки сообщения из списка сообщений доступны конкретному пользователю. эта таблица не создается для приватных переписок)
+-- имя такой таблицы для каждого пользователя задается так:
+-- CONCAT(id этого рользователя, '_', имя таблицы с сообщениями)
+CREATE TABLE if not exists my_chat.r_c_m(-- ref_chats_messages
+	id SERIAL PRIMARY KEY,
+	id_m BIGINT UNSIGNED NOT NULL -- указывет на сообщение (не надо делать внешний ключ потому, что невозможно подобрать таблицу, по которой этот ключ будет строиться (значения в этом поля будут из таблицы с неизвестным именем))
+)ENGINE InnoDB CHARACTER SET utf8;
+
+-- --------------------------------------------------------------------------------------
+
+
+-- --------------------------------------------------------------------------------------
+-- список личных переписок
+-- имя такой таблицы для каждого пользователя задается так:
+-- CONCAT('p', some id from users)
+CREATE TABLE if not exists my_chat.private_chats(
+	id SERIAL PRIMARY KEY,
+	name_of_messages_table VARCHAR(64) NOT NULL UNIQUE,
+	unread BOOL NOT NULL DEFAULT FALSE,
+	last_tick TIMESTAMP NOT NULL -- чтоб сортировать потом по этому полю
+)ENGINE InnoDB CHARACTER SET utf8;
+
+-- список конференций
+-- имя такой таблицы для каждого пользователя задается так:
+-- CONCAT('с', some id from users)
+CREATE TABLE if not exists my_chat.conferences
+	LIKE my_chat.private_chats;
+
+-- список запросов в друзья
+-- имя такой таблицы для каждого пользователя задается так:
+-- CONCAT('r', some id from users)
+CREATE TABLE if not exists my_chat.requests(
+	user_id BIGINT UNSIGNED NOT NULL UNIQUE,
+	message TEXT NOT NULL,
+	last_tick TIMESTAMP NOT NULL,
+	FOREIGN KEY(user_id) REFERENCES my_chat.users (id)
+	ON UPDATE CASCADE
+	ON DELETE RESTRICT
+)ENGINE InnoDB CHARACTER SET utf8;
+-- --------------------------------------------------------------------------------------
+
+
+
+
+
+-- --------------------------------------------------------------------------------------
+-- участники чата
+-- поле acs принимает 4 значения (NULL, '', 'g', 'r')
+-- NULL	- доступ закрыт
+-- ''	- обычный пользователь
+-- 'g' 	- пользователь, который может добавлять в чат других пользователей и менять имя чата
+-- 'r' 	- один пользователь, который назначать предыдущие уравни доступа всем пользователям и может добавлять в чат других пользователей
+-- имя такой таблицы для каждого чата задается так:
+-- CONCAT('part', имя таблиции сообщений, соответствующее этому списку участников переписки)
+CREATE TABLE if not exists my_chat.chat_m_g_d( -- chat_members_granting_default
+	user_id BIGINT UNSIGNED NOT NULL UNIQUE,
+	acs ENUM('g','r','') DEFAULT 'g', -- access
+	FOREIGN KEY(user_id) REFERENCES my_chat.users (id) ON UPDATE CASCADE ON DELETE RESTRICT
+)ENGINE InnoDB CHARACTER SET utf8;
+CREATE TABLE if not exists my_chat.chat_m_u_d -- chat_members_user_default
+	LIKE my_chat.chat_m_g_d;
+ALTER TABLE my_chat.chat_m_u_d ALTER acs SET DEFAULT '';
+
+-- хранит имя чата (всего одна строка)
+-- имя такой таблицы для каждого чата задается так:
+-- CONCAT('name', имя таблиции сообщений)
+CREATE TABLE if not exists my_chat.chat_name(
+	name VARCHAR(64) NOT NULL
+)ENGINE InnoDB CHARACTER SET utf8;
+
+-- сообщения
+-- имя такой таблицы для каждого чата задается, как индекс пользователя, что создал этот чат, и номер созданного им чата, что хранится в my_chat.users.n_created_chats
+create table if not exists my_chat.messages(
+	id SERIAL PRIMARY KEY,
+	user_id BIGINT UNSIGNED, -- если в этом поле будет NULL - это сообщение от сервера (например сообщение о том, что кто-то из пользователей добавил в чат еще одного пользователя)
+	message TEXT NOT NULL,
+	last_tick TIMESTAMP NOT NULL,
+	FOREIGN KEY(user_id) REFERENCES my_chat.users (id) ON UPDATE CASCADE ON DELETE RESTRICT
+);
+-- --------------------------------------------------------------------------------------
+
+
+
+-- --------------------------------------------------------------------------------------
+drop user chat;
+
+CREATE USER chat
+	IDENTIFIED BY 'chat';
+
+GRANT ALL ON my_chat.* TO 'chat';
+
+/*
+show grants for chat_server;
+
+тут я хотел запретить пользоваетлю chat_server смотреть на пароли и удалять строки в my_chat.users,
+но пишет, что не было назначено GRANT для (SELECT(pass) ON my_chat.users) и (DELETE ON my_chat.users) и пожтому отменять нечего...
+REVOKE SELECT(pass)
+	ON my_chat.users
+	FROM 'chat_server';
+
+
+REVOKE DELETE
+	ON my_chat.users
+	FROM chat_server;
+*/
+-- --------------------------------------------------------------------------------------
+
+
+
+
+-- --------------------------------------------------------------------------------------
+DELIMITER //
+
+DROP PROCEDURE IF EXISTS GNMF;
+CREATE PROCEDURE GNMF(n BIGINT UNSIGNED, m BIGINT UNSIGNED, tabl VARCHAR(64)) -- Get N M From (взять m начиная с n из таблици где есть поле id)
+BEGIN
+	START TRANSACTION;
+		SET @var = CONCAT('SELECT id FROM ', tabl, ' ORDER BY id DESC LIMIT ', n, ', ', m); -- LIMIT <номер строки выборки с которого начинать, количество строк>;
+		PREPARE query FROM @var; -- формировка запроса query
+		EXECUTE query; -- выполнение запроса query
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS AUT;
+CREATE PROCEDURE AUT(login VARCHAR(40), password VARCHAR(40)) -- authorize
+BEGIN
+	START TRANSACTION;
+		SELECT id FROM my_chat.users WHERE log = login AND pass = password;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS GET_USER_ID;
+CREATE PROCEDURE GET_USER_ID(login VARCHAR(40))
+BEGIN
+	START TRANSACTION;
+		SELECT id FROM my_chat.users WHERE log = login;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS ADDUSER;
+CREATE PROCEDURE ADDUSER(login VARCHAR(40), password VARCHAR(40))
+BEGIN
+	START TRANSACTION;
+		insert into my_chat.users (log, pass) values(login, password);
+
+		SET @var := CONCAT('CREATE TABLE if not exists my_chat.p', (SELECT @id_ := id FROM my_chat.users WHERE log = login), ' LIKE my_chat.private_chats');
+		PREPARE query FROM @var; EXECUTE query;
+
+		SET @var := CONCAT('CREATE TABLE if not exists my_chat.c', @id_, ' LIKE my_chat.conferences');
+		PREPARE query FROM @var; EXECUTE query;
+
+		SET @var := CONCAT('CREATE TABLE if not exists my_chat.r', @id_, ' LIKE my_chat.requests');
+		PREPARE query FROM @var; EXECUTE query;
+	COMMIT;
+END//
+
+
+DROP PROCEDURE IF EXISTS GET_FRIEND_ID;
+CREATE PROCEDURE GET_FRIEND_ID(login VARCHAR(40))
+BEGIN
+		SET @user_id := (SELECT id FROM my_chat.users WHERE log = login);
+		IF (@user_id > 0) THEN
+			START TRANSACTION;
+			SET @var := CONCAT('CREATE TEMPORARY TABLE addressees SELECT LALKA.id, LALKA.name_of_messages_table FROM my_chat.p', @userID, ' AS LALKA');
+			PREPARE query FROM @var; EXECUTE query;
+			ALTER TABLE addressees ADD COLUMN num SERIAL;
+			ALTER TABLE addressees ADD INDEX (num);
+			
+			SET @i := 1;
+			SET @max_ := (SELECT MAX(num) FROM addressees);
+			SET @res := 0;
+			IF (@user_id = @userID) THEN
+				WHILE (@i <= @max_ AND @res = 0) DO
+					SET @var := CONCAT('SET @res := (SELECT id FROM addressees WHERE num = @i AND (1 = (SELECT COUNT(user_id) FROM my_chat.part', (SELECT name_of_messages_table FROM addressees WHERE num = @i), ')))');
+					PREPARE query FROM @var; EXECUTE query;
+					IF (@res > 0) THEN
+						SET @tmp := 0;
+					ELSE
+						SET @res := 0;
+					END IF;
+					SET @i := @i + 1;
+				END WHILE;
+			ELSE
+				WHILE (@i <= @max_ AND @res = 0) DO
+					SET @var := CONCAT('SET @res := (SELECT id FROM addressees WHERE num = @i AND (@user_id IN (SELECT user_id FROM my_chat.part', (SELECT name_of_messages_table FROM addressees WHERE num = @i), ')))');
+					PREPARE query FROM @var; EXECUTE query;
+					IF (@res > 0) THEN
+						SET @tmp := 0;
+					ELSE
+						SET @res := 0;
+					END IF;
+					SET @i := @i + 1;
+				END WHILE;
+			END IF;
+
+			ALTER TABLE addressees DROP COLUMN num;
+			ALTER TABLE addressees DROP COLUMN name_of_messages_table;
+
+			SELECT @res;
+
+			DROP TABLE addressees;
+			COMMIT;
+		END IF;
+END//
+
+/*
+-- переделать
+DROP PROCEDURE IF EXISTS GET_FRIEND_ID_FUNC;
+CREATE PROCEDURE GET_FRIEND_ID_FUNC(login VARCHAR(40))
+BEGIN
+	START TRANSACTION;
+		-- переделать
+		SET @var = CONCAT('SET @res_GET_FRIEND_ID_FUNC = (SELECT id FROM my_chat.p', @userID, ' WHERE (SELECT id FROM my_chat.users WHERE log = ', login,' ) IN (SELECT user_id FROM CONCAT(''part'', name_of_messages_table)))');
+		PREPARE query FROM @var; EXECUTE query;
+	COMMIT;
+END//
+*/
+
+DROP PROCEDURE IF EXISTS GET_FRIEND_LOG;
+CREATE PROCEDURE GET_FRIEND_LOG(friendID BIGINT UNSIGNED)
+BEGIN
+	START TRANSACTION;
+		SET @var = CONCAT('SET @name := (SELECT name_of_messages_table FROM my_chat.p', @userID,' WHERE id = ', friendID, ')');
+		PREPARE query FROM @var; EXECUTE query;
+		SET @var = CONCAT('SELECT log FROM my_chat.users WHERE id IN (SELECT user_id FROM my_chat.part', @name, ') AND id != @userID');
+		PREPARE query FROM @var; EXECUTE query;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS SEND_P_M;
+CREATE PROCEDURE SEND_P_M(freindID BIGINT UNSIGNED, message_ TEXT)
+BEGIN
+	START TRANSACTION;
+		SET @var = CONCAT('SET @name := (SELECT name_of_messages_table FROM my_chat.p', @userID, ' WHERE id = ', freindID, ')');
+		PREPARE query FROM @var; EXECUTE query;
+		IF (@name != 'wwe') THEN -- wwe просто так. важно что name не NULL
+			-- отсылаем собщение
+			SET @var := CONCAT('insert into my_chat.', @name, ' (user_id, message) values(@userID, ''', message_,''')');
+			PREPARE query FROM @var; EXECUTE query;
+			-- SET @var := CONCAT('SET @id_m_ := (SELECT MAX(id) FROM my_chat.', @name, ')');
+			-- PREPARE query FROM @var; EXECUTE query;
+			-- говорим об этом всем участникам
+			SET @var := CONCAT('CREATE TEMPORARY TABLE addressees SELECT user_id FROM my_chat.part', @name);
+			PREPARE query FROM @var; EXECUTE query;
+			ALTER TABLE addressees ADD COLUMN id SERIAL PRIMARY KEY;
+			SET @i := 1;
+			SET @max_ := (SELECT MAX(id) FROM addressees);
+			WHILE @i <= @max_ DO
+				SET @id_ := (SELECT user_id FROM addressees WHERE id = @i);
+				
+				SET @var := CONCAT('SET @unread_ := (SELECT unread FROM my_chat.p', @id_, ' WHERE id = ', freindID, ')');
+				PREPARE query FROM @var; EXECUTE query;
+				IF (@unread_ = FALSE) THEN
+					UPDATE my_chat.users SET unread_private_chats := TRUE, n_unread_private_chats := n_unread_private_chats + 1 WHERE id = @id_;
+					SET @var := CONCAT('UPDATE my_chat.p', @id_, ' SET unread := TRUE WHERE id = ', freindID);
+					PREPARE query FROM @var; EXECUTE query;
+				ELSE
+					UPDATE my_chat.users SET unread_private_chats := TRUE WHERE id = @id_;
+				END IF;
+
+				SET @i := @i + 1;
+			END WHILE;
+			DROP TABLE addressees;
+		ELSE
+			SELECT 1;
+		END IF;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS SEND_C_M;
+CREATE PROCEDURE SEND_C_M(chatID BIGINT UNSIGNED, message_ TEXT)
+BEGIN
+	START TRANSACTION;
+		SET @var = CONCAT('SET @name := (SELECT name_of_messages_table FROM my_chat.c', @userID, ' WHERE id = ', chatID,')');
+		PREPARE query FROM @var; EXECUTE query;
+		SET @chek := NULL;
+		IF (@name != NULL) THEN
+			SET @var = CONCAT('SET @chek := (SELECT acs FROM my_chat.part', @name, ' WHERE user_id = @userID)');
+			PREPARE query FROM @var; EXECUTE query;
+		END IF;
+		IF (@chek != 'wwe') THEN -- wwe просто так. важно что chek не NULL
+			-- отсылаем собщение
+			SET @var := CONCAT('insert into my_chat.', @name, ' (user_id, message) values(@userID, ''', message_,''')');
+			PREPARE query FROM @var; EXECUTE query;
+			SET @var := CONCAT('SET @id_m_ := (SELECT MAX(id) FROM my_chat.', @name, ')');
+			PREPARE query FROM @var; EXECUTE query;
+			-- говорим об этом всем участникам
+			SET @var := CONCAT('CREATE TEMPORARY TABLE addressees SELECT user_id FROM my_chat.part', @name, ' WHERE acs != NULL');
+			PREPARE query FROM @var; EXECUTE query;
+			ALTER TABLE addressees ADD COLUMN id SERIAL PRIMARY KEY;
+			SET @i := 1;
+			SET @max_ := (SELECT MAX(id) FROM addressees);
+			WHILE @i <= @max_ DO
+				SET @id_ := (SELECT user_id FROM addressees WHERE id = @i);
+				-- 
+				
+				SET @var := CONCAT('SET @unread_ := (SELECT unread FROM my_chat.c', @id_, ' WHERE id = ', chatID, ')');
+				PREPARE query FROM @var; EXECUTE query;
+				IF (@unread_ = FALSE) THEN
+					UPDATE my_chat.users SET unread_chats := TRUE, n_unread_chats := n_unread_chats + 1 WHERE id = @id_;
+					SET @var := CONCAT('UPDATE my_chat.c', @id_, ' SET unread = TRUE WHERE id = ', chatID);
+					PREPARE query FROM @var; EXECUTE query;
+				ELSE
+					UPDATE my_chat.users SET unread_chats := TRUE WHERE id = @id_;
+				END IF;
+
+				-- 
+				SET @var := CONCAT('insert into my_chat.', @id_, '_', @name, ' (id_m) values(@id_m_)');
+				PREPARE query FROM @var; EXECUTE query;
+				-- 
+				SET @i := @i + 1;
+			END WHILE;
+			DROP TABLE addressees;
+		ELSE
+			SELECT 1;
+		END IF;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS SEND_REQUEST;
+CREATE PROCEDURE SEND_REQUEST(login VARCHAR(40), message_ TEXT)
+BEGIN
+	START TRANSACTION;
+		-- делаем таблицу реальных id друзей
+		SET @var := CONCAT('CREATE TEMPORARY TABLE addressees SELECT LALKA.name_of_messages_table FROM my_chat.p', @userID, ' AS LALKA');
+		PREPARE query FROM @var; EXECUTE query;
+		ALTER TABLE addressees ADD COLUMN num SERIAL;
+		ALTER TABLE addressees ADD INDEX (num);
+		ALTER TABLE addressees ADD COLUMN user_id BIGINT;
+			
+		SET @i := 1;
+		SET @max_ := (SELECT MAX(num) FROM addressees);
+		WHILE @i <= @max_ DO
+			SET @tmp_name := (SELECT name_of_messages_table FROM addressees WHERE num = @i);
+			SET @var := CONCAT('UPDATE addressees SET user_id := (SELECT user_id FROM my_chat.part', @tmp_name, ' WHERE (user_id != @userID OR (1 = (SELECT COUNT(user_id) FROM my_chat.part', @tmp_name, ')))) WHERE num = @i');
+			PREPARE query FROM @var; EXECUTE query;
+			SET @i := @i + 1;
+		END WHILE;
+
+		ALTER TABLE addressees DROP COLUMN num;
+		ALTER TABLE addressees DROP COLUMN name_of_messages_table;
+		-- закончили
+
+		-- проверка, что login - не друг
+		-- SET @id_ := NULL;
+		SET @id_ := (SELECT id FROM my_chat.users WHERE log = login AND id IN (SELECT user_id FROM addressees));
+		IF (@id_ > 0) THEN
+			SELECT 'NULL';
+		ELSE
+			SET @id_ := (SELECT id FROM my_chat.users WHERE log = login);
+			SET @var := CONCAT('SET @chek := (SELECT user_id FROM my_chat.r', @id_, ' WHERE user_id = @userID)');
+			PREPARE query FROM @var; EXECUTE query;
+			IF (@chek > 0) THEN
+				SET @var := CONCAT('UPDATE my_chat.r', @id_, ' SET message = ''', message_, ''' WHERE user_id = @userID');
+			ELSE
+				SET @var := CONCAT('insert into my_chat.r', @id_, ' (user_id, message) values(@userID,''', message_, ''')');
+				UPDATE my_chat.users SET n_request := n_request + 1 WHERE id = @id_;
+			END IF;
+			PREPARE query FROM @var; EXECUTE query;
+			UPDATE my_chat.users SET request := TRUE WHERE id = @id_;
+		END IF;
+		DROP TABLE addressees;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS ACCEPT_REQUEST;
+CREATE PROCEDURE ACCEPT_REQUEST(login VARCHAR(40))
+BEGIN
+	START TRANSACTION;
+		SET @var = CONCAT('SET @requesterID := (SELECT user_id FROM my_chat.r', @userID, ' WHERE user_id = (SELECT id FROM my_chat.users WHERE log = ''', login, '''))');
+		PREPARE query FROM @var; EXECUTE query;
+		IF(@requesterID > 0) THEN
+			IF(@userID < @requesterID) THEN
+				SET @name = CONCAT(@userID, @requesterID);
+			ELSE
+				SET @name = CONCAT(@requesterID, @userID);
+			END IF;
+
+			SET @var := CONCAT('CREATE TABLE if not exists my_chat.', @name,' LIKE my_chat.messages');
+			PREPARE query FROM @var; EXECUTE query;
+			SET @var := CONCAT('CREATE TABLE if not exists my_chat.part', @name,' LIKE my_chat.chat_m_u_d');
+			PREPARE query FROM @var; EXECUTE query;
+			SET @var := CONCAT('insert into my_chat.p', @userID, ' (name_of_messages_table) values(@name)');
+			PREPARE query FROM @var; EXECUTE query;
+			SET @var := CONCAT('insert into my_chat.part', @name, ' (user_id) values(@userID)');
+			PREPARE query FROM @var; EXECUTE query;
+
+			IF(@userID != @requesterID) THEN
+				SET @var := CONCAT('insert into my_chat.p', @requesterID, ' (name_of_messages_table) values(@name)');
+				PREPARE query FROM @var; EXECUTE query;
+				SET @var := CONCAT('insert into my_chat.part', @name, ' (user_id) values(@requesterID)');
+				PREPARE query FROM @var; EXECUTE query;
+			END IF;
+
+			SET @var := CONCAT('DELETE FROM my_chat.r', @userID, ' WHERE user_id = @requesterID');
+			PREPARE query FROM @var; EXECUTE query;
+			UPDATE my_chat.users SET n_request := n_request - 1 WHERE id = @userID;
+
+		ELSE
+			SELECT CONCAT('you have no requester with login: '' ', login, ' ''.');
+		END IF;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS CREATE_CHAT;
+CREATE PROCEDURE CREATE_CHAT(name_of_chat VARCHAR(60), def_user ENUM('g', 'u'))
+BEGIN
+	START TRANSACTION;
+		IF(def_user = 'g' OR def_user = 'u') THEN
+			UPDATE my_chat.users SET n_created_chats := (SELECT @n_chat := n_created_chats + 1) WHERE id = @userID;
+
+			SET @name := CONCAT(@userID, '_', @n_chat);
+			
+			SET @var := CONCAT('CREATE TABLE my_chat.', @name,' LIKE my_chat.messages');
+			PREPARE query FROM @var; EXECUTE query;
+
+			SET @var := CONCAT('CREATE TABLE my_chat.part', @name,' LIKE my_chat.chat_m_', def_user, '_d');
+			PREPARE query FROM @var; EXECUTE query;
+			SET @var := CONCAT('insert into my_chat.part', @name, ' (user_id, acs) values(@userID, ''r'')');
+			PREPARE query FROM @var; EXECUTE query;
+
+			SET @var := CONCAT('CREATE TABLE my_chat.name', @name,' LIKE my_chat.chat_name');
+			PREPARE query FROM @var; EXECUTE query;
+			SET @var := CONCAT('insert into my_chat.name', @name, ' (name) values(name_of_chat)');
+			PREPARE query FROM @var; EXECUTE query;
+
+			SET @var := CONCAT('insert into my_chat.с', @userID, ' (name_of_messages_table) values(@name)');
+			PREPARE query FROM @var; EXECUTE query;
+
+			SET @var := CONCAT('CREATE TABLE my_chat.', @userID, '_', @name,' LIKE my_chat.r_c_m');
+			PREPARE query FROM @var; EXECUTE query;
+		ELSE
+			SELECT CONCAT('wrong second parameter ', def_user);
+		END IF;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS IS_FRIEND_IN_CHAT;
+CREATE PROCEDURE IS_FRIEND_IN_CHAT(friendID BIGINT UNSIGNED, chatID BIGINT UNSIGNED)
+BEGIN
+	START TRANSACTION;
+		-- берем реальное id друга
+		SET @var = CONCAT('SET @name := (SELECT name_of_messages_table FROM my_chat.p', @userID,' WHERE id = friendID)');
+		PREPARE query FROM @var; EXECUTE query;
+		SET @var = CONCAT('SET @frienduserID := (SELECT id FROM my_chat.users WHERE id IN (SELECT user_id FROM my_chat.part', @name, '))');
+		PREPARE query FROM @var; EXECUTE query;
+		-- проверяем есть ли он в данном чате
+		SET @var = CONCAT('SET @name := (SELECT name_of_messages_table FROM my_chat.c', @userID,' WHERE id = chatID)');
+		PREPARE query FROM @var; EXECUTE query;
+		-- вернет непусто, если есть
+		SET @var = CONCAT('SELECT 1 FROM my_chat.part', @name, ' WHERE user_id = @frienduserID');
+		PREPARE query FROM @var; EXECUTE query;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS ADD_PART;
+CREATE PROCEDURE ADD_PART(friendID BIGINT UNSIGNED, chatID BIGINT UNSIGNED)
+BEGIN
+	START TRANSACTION;
+		-- берем реальное id друга
+		SET @var = CONCAT('SET @name := (SELECT name_of_messages_table FROM my_chat.p', @userID,' WHERE id = friendID)');
+		PREPARE query FROM @var; EXECUTE query;
+		SET @var = CONCAT('SET @frienduserID := (SELECT id FROM my_chat.users WHERE id IN (SELECT user_id FROM part', @name, '))');
+		PREPARE query FROM @var; EXECUTE query;
+		-- проверяем, может ли userID добавлять друзей
+		SET @var = CONCAT('SET @name := (SELECT name_of_messages_table FROM my_chat.c', @userID,' WHERE id = chatID)');
+		PREPARE query FROM @var; EXECUTE query;
+		SET @chek := NULL;
+		SET @var = CONCAT('SET @chek := (SELECT 1 FROM my_chat.part', @name, ' WHERE user_id = @userID AND acs IN (''g'',''r''))');
+		PREPARE query FROM @var; EXECUTE query;
+		IF(@chek != NULL) THEN
+			-- добавляем пользователя в чат
+			SET @var := CONCAT('insert into my_chat.part', @name, ' (user_id) values(@frienduserID)');
+			PREPARE query FROM @var; EXECUTE query;
+			-- создаем список ссылок на сообщения в списке сообщений для @frienduserID
+			SET @var := CONCAT('CREATE TABLE my_chat.', @frienduserID, '_', @name,' LIKE my_chat.r_c_m');
+			PREPARE query FROM @var; EXECUTE query;
+		ELSE
+			SELECT 1;
+		END IF;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS SET_ACCESS;
+CREATE PROCEDURE SET_ACCESS(login VARCHAR(40), chatID BIGINT UNSIGNED, acs_ ENUM('g','u'))
+BEGIN
+	START TRANSACTION;
+		SET @_acs_ := acs_;
+		IF (@_acs_ = 'u') THEN SET @_acs_ := ''; END IF;
+
+		SET @var = CONCAT('SET @name := (SELECT name_of_messages_table FROM my_chat.c', @userID,' WHERE id = chatID)');
+		PREPARE query FROM @var; EXECUTE query;
+
+		SET @chek := NULL;
+		SET @var = CONCAT('SET @chek := (SELECT 1 FROM my_chat.part', @name, ' WHERE user_id = @userID AND acs = ''r'')');
+		PREPARE query FROM @var; EXECUTE query;
+		IF(@chek != NULL) THEN
+			SET @id_ := NULL;
+			SET @id__ := (SELECT id FROM my_chat.users WHERE log = login);
+			SET @var = CONCAT('SET @id_ := (SELECT user_id FROM my_chat.part', @name, ' WHERE user_id = @id__)');
+			PREPARE query FROM @var; EXECUTE query;
+			IF(@id_ != NULL AND @id_ != @userID) THEN
+				SET @var = CONCAT('UPDATE my_chat.part', @name, ' SET acs := ', _acs_,' WHERE user_id = @id_');
+				PREPARE query FROM @var; EXECUTE query;
+			ELSE
+				SELECT 2;
+			END IF;
+		ELSE
+			SELECT 1;
+		END IF;
+
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS ONLINE;
+CREATE PROCEDURE ONLINE()
+BEGIN
+	START TRANSACTION;
+		SELECT unread_private_chats, unread_chats, request FROM my_chat.users WHERE id = @userID;
+		UPDATE my_chat.users SET unread_private_chats := FALSE, unread_chats := FALSE, request := FALSE, last_tick := NOW() WHERE id = @userID;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS GNM_PART_F_CHAT;
+CREATE PROCEDURE GNM_PART_F_CHAT(n BIGINT UNSIGNED, m BIGINT UNSIGNED, like_ VARCHAR(50), chatID BIGINT UNSIGNED)
+BEGIN
+	-- START TRANSACTION;
+		SET @var = CONCAT('SET @name := (SELECT name_of_messages_table FROM my_chat.c', @userID,' WHERE id = chatID)');
+		PREPARE query FROM @var; EXECUTE query;
+		SET @var = CONCAT('SELECT log, acs FROM my_chat.users, my_chat.part', @name,' WHERE id = user_id AND log LIKE ''', like_,''' ORDER BY log ASC LIMIT ', n, ', ', m);
+		PREPARE query FROM @var; EXECUTE query;
+	-- COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS GNM_REQUESTS;
+CREATE PROCEDURE GNM_REQUESTS(n BIGINT UNSIGNED, m BIGINT UNSIGNED, like_ VARCHAR(50))
+BEGIN
+	START TRANSACTION;
+		SET @var := CONCAT('SELECT U.log, M.message FROM my_chat.r', @userID,' AS M, my_chat.users AS U WHERE U.log LIKE ''', like_,''' AND U.id = M.user_id ORDER BY M.last_tick DESC LIMIT ', n, ', ', m);
+		PREPARE query FROM @var; EXECUTE query;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS GNM_MESSAGES_P;
+CREATE PROCEDURE GNM_MESSAGES_P(n BIGINT UNSIGNED, m BIGINT UNSIGNED, friendID BIGINT UNSIGNED)
+BEGIN
+		SET @var = CONCAT('SET @name := (SELECT name_of_messages_table FROM my_chat.p', @userID,' WHERE id = ', friendID, ')');
+		PREPARE query FROM @var; EXECUTE query;
+		SET @var = CONCAT('SET @unread_ := (SELECT unread FROM my_chat.p', @userID,' WHERE id = ', friendID, ')');
+		PREPARE query FROM @var; EXECUTE query;
+		IF (@unread_ = TRUE AND n = 0) THEN
+			START TRANSACTION;
+				SET @var = CONCAT('UPDATE my_chat.p', @userID, ' SET unread := FALSE, last_tick := last_tick WHERE id = ', friendID);
+				PREPARE query FROM @var; EXECUTE query;
+				UPDATE my_chat.users SET n_unread_private_chats := n_unread_private_chats - 1 WHERE id = @userID;
+			COMMIT;
+		END IF;
+		SET @var = CONCAT('SELECT M.id, U.log, M.message, M.last_tick FROM my_chat.users AS U, my_chat.', @name,' AS M WHERE user_id = U.id ORDER BY M.id DESC LIMIT ', n, ', ', m);
+		PREPARE query FROM @var; EXECUTE query;
+END//
+
+DROP PROCEDURE IF EXISTS GNM_MESSAGES_С;
+CREATE PROCEDURE GNM_MESSAGES_С(n BIGINT UNSIGNED, m BIGINT UNSIGNED, chatID BIGINT UNSIGNED)
+BEGIN
+	-- START TRANSACTION;
+		SET @var = CONCAT('SET @name := (SELECT name_of_messages_table FROM my_chat.c', @userID,' WHERE id = ', chatID, ')');
+		PREPARE query FROM @var; EXECUTE query;
+		SET @var = CONCAT('SET @unread_ := (SELECT unread FROM my_chat.c', @userID,' WHERE id = ', chatID, ')');
+		PREPARE query FROM @var; EXECUTE query;
+		IF (@unread_ = TRUE AND n = 0) THEN
+			START TRANSACTION;
+				SET @var = CONCAT('UPDATE my_chat.c', @userID, ' SET unread := FALSE, last_tick := last_tick WHERE id = ', chatID);
+				PREPARE query FROM @var; EXECUTE query;
+				UPDATE my_chat.users SET n_unread_chats := n_unread_chats - 1 WHERE id = @userID;
+			COMMIT;
+		END IF;
+		SET @var = CONCAT('SELECT ID_M_.id, U.log, M.message, M.last_tick FROM my_chat.users AS U, my_chat.', @userID, '_', @name,' AS ID_M_, my_chat.', @name,' AS M WHERE M.user_id = U.id AND ID_M_.id_m = M.id ORDER BY ID_M_.id DESC LIMIT ', n, ', ', m);
+		PREPARE query FROM @var; EXECUTE query;
+	-- COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS GNM_CHATS;
+CREATE PROCEDURE GNM_CHATS(n BIGINT UNSIGNED, m BIGINT UNSIGNED, like_ VARCHAR(50), ch CHARACTER(1))
+BEGIN
+	START TRANSACTION;
+		IF (ch = 'p' OR ch = 'c') THEN
+			SET @var := CONCAT('CREATE TEMPORARY TABLE addressees SELECT * FROM my_chat.', ch, @userID, ' AS LALKA');
+			PREPARE query FROM @var; EXECUTE query;
+			ALTER TABLE addressees ADD COLUMN num SERIAL;
+			ALTER TABLE addressees ADD INDEX (num);
+			ALTER TABLE addressees ADD COLUMN name VARCHAR(64);
+			
+			SET @i := 1;
+			SET @max_ := (SELECT MAX(num) FROM addressees);
+			IF (ch = 'p') THEN
+				WHILE @i <= @max_ DO 
+					SET @tmp_name := (SELECT name_of_messages_table FROM addressees WHERE num = @i);
+					SET @var := CONCAT('UPDATE addressees SET name := (SELECT log FROM my_chat.users WHERE id IN (SELECT user_id FROM my_chat.part', @tmp_name, ') AND (id != @userID OR (1 = (SELECT COUNT(user_id) FROM my_chat.part', @tmp_name, '))) AND log LIKE ''', like_,''') WHERE num = @i');
+					PREPARE query FROM @var; EXECUTE query;
+					SET @i := @i + 1;
+				END WHILE;
+			ELSE
+				WHILE @i <= @max_ DO
+					SET @var := CONCAT('UPDATE addressees SET name := (SELECT N.name FROM my_chat.name', (SELECT name_of_messages_table FROM addressees WHERE num = @i), ' AS N WHERE N.name LIKE ''', like_,''')');
+					PREPARE query FROM @var; EXECUTE query;
+					SET @i := @i + 1;
+				END WHILE;
+			END IF;
+			SELECT id, name FROM addressees ORDER BY last_tick DESC LIMIT n, m;
+			DROP TABLE addressees;
+		END IF;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS GET_LAST_USER_TICK;
+CREATE PROCEDURE GET_LAST_USER_TICK(login VARCHAR(40))
+BEGIN
+	START TRANSACTION;
+		SELECT last_tick FROM my_chat.users WHERE log = login;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS GET_USER_DATA;
+CREATE PROCEDURE GET_USER_DATA(login VARCHAR(40))
+BEGIN
+	START TRANSACTION;
+		SELECT status FROM my_chat.users WHERE log = login;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS GNM_USERS;
+CREATE PROCEDURE GNM_USERS(n BIGINT UNSIGNED, m BIGINT UNSIGNED, login VARCHAR(40))
+BEGIN
+	START TRANSACTION;
+		SET @var := CONCAT('CREATE TEMPORARY TABLE addressees SELECT LALKA.name_of_messages_table FROM my_chat.p', @userID, ' AS LALKA');
+		PREPARE query FROM @var; EXECUTE query;
+		ALTER TABLE addressees ADD COLUMN num SERIAL;
+		ALTER TABLE addressees ADD INDEX (num);
+		ALTER TABLE addressees ADD COLUMN user_id BIGINT;
+			
+		SET @i := 1;
+		SET @max_ := (SELECT MAX(num) FROM addressees);
+		WHILE @i <= @max_ DO
+			SET @tmp_name := (SELECT name_of_messages_table FROM addressees WHERE num = @i);
+			SET @var := CONCAT('UPDATE addressees SET user_id := (SELECT user_id FROM my_chat.part', @tmp_name, ' WHERE (user_id != @userID OR (1 = (SELECT COUNT(user_id) FROM my_chat.part', @tmp_name, ')))) WHERE num = @i');
+			PREPARE query FROM @var; EXECUTE query;
+			SET @i := @i + 1;
+		END WHILE;
+
+		ALTER TABLE addressees DROP COLUMN num;
+		ALTER TABLE addressees DROP COLUMN name_of_messages_table;
+
+		SET @var := CONCAT('SELECT log FROM my_chat.users WHERE id <> ALL (SELECT user_id FROM addressees) AND id <> ALL (SELECT user_id FROM my_chat.r', @userID, ') AND log LIKE ''', login,''' ORDER BY last_tick DESC LIMIT ', n, ', ', m);
+		PREPARE query FROM @var; EXECUTE query;
+		DROP TABLE addressees;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS GET_UNREAD_LAST_TICK;
+CREATE PROCEDURE GET_UNREAD_LAST_TICK(id_ BIGINT UNSIGNED, ch CHARACTER(1))
+BEGIN
+	-- START TRANSACTION;
+		IF (ch = 'p' OR ch = 'c') THEN
+			SET @var := CONCAT('SELECT unread, last_tick FROM my_chat.', ch, @userID, ' WHERE id = ', id_);
+			PREPARE query FROM @var; EXECUTE query;
+		END IF;
+	-- COMMIT;
+END//
+
+DELIMITER ;
+-- --------------------------------------------------------------------------------------

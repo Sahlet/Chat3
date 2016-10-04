@@ -1,0 +1,21 @@
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\bin\Debug\chat_client.exe.config
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\bin\Debug\chat_client.exe
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\bin\Debug\chat_client.pdb
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Debug\chat_client.Form1.resources
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Debug\chat_client.Properties.Resources.resources
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Debug\chat_client.csproj.GenerateResource.Cache
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Debug\chat_client.exe
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Debug\chat_client.pdb
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Debug\chat_client.Form2.resources
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Debug\chat_client.Message.resources
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Debug\chat_client.Button_more.resources
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Debug\chat_client.ItemList_with_Button_more.resources
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Debug\chat_client.Form3.resources
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Debug\chat_client.Menager_for_conference.resources
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Debug\chat_client.AdderFriend.resources
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Debug\chat_client.csprojResolveAssemblyReference.cache
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Debug\chat_client.Conference.resources
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Debug\chat_client.User.resources
+D:\Книги\Прога\5 семестр\точно будет(начинать с этого)\Мережі_2015\Chat2\chat_client\chat_client\bin\Debug\chat_client.exe.config
+D:\Книги\Прога\5 семестр\точно будет(начинать с этого)\Мережі_2015\Chat2\chat_client\chat_client\obj\Debug\chat_client.exe
+D:\Книги\Прога\5 семестр\точно будет(начинать с этого)\Мережі_2015\Chat2\chat_client\chat_client\obj\Debug\chat_client.pdb

@@ -1,0 +1,10 @@
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\bin\Release\chat_client.exe.config
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\bin\Release\chat_client.exe
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\bin\Release\chat_client.pdb
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Release\chat_client.Form1.resources
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Release\chat_client.Form2.resources
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Release\chat_client.Properties.Resources.resources
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Release\chat_client.csproj.GenerateResource.Cache
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Release\chat_client.exe
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Release\chat_client.pdb
+C:\Users\SaHLeT\Documents\Visual Studio 2012\Projects\chat_client\chat_client\obj\Release\chat_client.csprojResolveAssemblyReference.cache
