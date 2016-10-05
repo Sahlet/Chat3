@@ -69,10 +69,10 @@ BEGIN
 END//
 
 DROP PROCEDURE IF EXISTS CREATE_CHAT//
-CREATE PROCEDURE CREATE_CHAT(userID BIGINT UNSIGNED, chat_name_ VARCHAR(255), avatar_ BLOB)
+CREATE PROCEDURE CREATE_CHAT(userID BIGINT UNSIGNED)
 BEGIN
 	START TRANSACTION;
-		INSERT INTO my_chat.chats (chat_name, avatar) values(chat_name_, avatar_);
+		INSERT INTO my_chat.chats (/*chat_name, avatar*/) values(/*chat_name_, avatar_*/);
         SET @chatID = (SELECT last_insert_id());
         INSERT INTO my_chat.chat_members (chat_id, user_id, access) values(@chatID, userID, 'a');
 	COMMIT;
