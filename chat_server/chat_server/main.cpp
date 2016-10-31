@@ -7,10 +7,6 @@
 //
 //*/
 //
-//#include <My\WinSockBaseSerialization.h>
-//#include <My\thread_pool.h>
-//#include<iostream>
-//using namespace My;
 //
 //
 //#pragma region TheProgramm
@@ -777,54 +773,69 @@
 //	}
 //}
 //
-//int main(int argc, char *argv[]){
-//#pragma region Connecting to DATABASE
-//	MD = mysql_init(NULL);
-//	if(MD == nullptr){
-//		cerr << error << "can not create MYSQL descriptor.\n";
-//		return 1;
-//	}
-//	string port_s;
-//	if (argc != 5){
-//		cout << "Enter host:\n"; cin >> Mhost;
-//		cout << "Enter port:\n"; cin >> port_s;
-//		cout << "Enter login:\n"; cin >> Muser;
-//		cout << "Enter password:\n"; cin >> Mpassword;
-//	} else { Mhost = argv[1]; port_s = argv[2]; Muser = argv[3]; Mpassword = argv[4]; }
-//	
-//	try{
-//		Mport = atoi(port_s.c_str());
-//		if (atoi(port_s.c_str()) < 0 || (Mport == 0 && port_s != "0")) throw 2;
-//	}
-//	catch(...){
-//		cerr << error << "bad port.\n";
-//		return 2;
-//	}
-//	if( !mysql_real_connect(MD, Mhost.c_str(), Muser.c_str(), Mpassword.c_str(), NULL, Mport, NULL, CLIENT_MULTI_STATEMENTS) ){
-//		cerr << error << mysql_error(MD) << endl;
-//		return 3;
-//	} else {
-//		if(mysql_query(MD, "USE my_chat") > 0){
-//			cerr << error << mysql_error(MD) << endl;
-//			return 4;
-//		}
-//		cout << "connected.\n";
-//	}
-//#pragma endregion
-//	try{
-//		MySocketPtr sock(new MyWinSocket(SOCK_STREAM));
-//		sock->bind((MySocketAddress*)new MyWinSocketAddress("", 30000));
-//		sock->listen(SOMAXCONN);
-//		while (true) CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)for_client, (LPVOID)sock->accept(), NULL, NULL);
-//	}
-//	catch(MyException ex){ cerr << ex.toString(); }
-//	catch(...){
-//		cerr << error << "server crashed.\n";
-//		return 10;
-//	}
-//	//mysql_close(MD);
-//	return 0;
-//}
-//#pragma endregion
+
+#include <My\WinSockBaseSerialization.h>
+#include <My\thread_pool.h>
+#include "mysqlWrap.h"
+#include <iostream>
+using namespace My;
+using namespace std;
+
+const unsigned int max_conncectins_count = 0b11111111111111111;
+string BASEhost, BASEuser, BASEpassword;
+unsigned int BASEport;
+
+void query_processor(WinSocket sock, mysqlWrap& connection);
+
+int main(int argc, char *argv[]) {
+#pragma region Connecting to DATABASE
+	try {
+		string s_port;
+		if (argc != 5) {
+			cout << "Enter host:\n"; cin >> BASEhost;
+			cout << "Enter port:\n"; cin >> s_port;
+			cout << "Enter login:\n"; cin >> BASEuser;
+			cout << "Enter password:\n"; cin >> BASEpassword;
+		} else { BASEhost = argv[1]; s_port = argv[2]; BASEuser = argv[3]; BASEpassword = argv[4]; }
+
+		
+		int port = atoi(s_port.c_str());
+		if (port < 0 || (port == 0 && s_port != "0")) throw std::exception("bad port");
+		BASEport = port;
+		
+		mysqlWrap test_connection(BASEhost.c_str(), BASEport, BASEuser.c_str(), BASEpassword.c_str());
+		
+		cout << "connected.\n";
+		
+#pragma endregion
+		try {
+			WinSocket sock;
+			sock.bind(WinSocketAddress("", 30000));
+			sock.listen(max_conncectins_count);
+			My::thread_pool< mysqlWrap& > pool(10, max_conncectins_count);
+			while (true) {
+				pool.add_task([&sock](mysqlWrap& connection){
+						query_processor(sock.accept(), connection);
+					}
+				);
+			}
+		}
+		catch (...) {
+			cout << "server crashed.\n";
+			throw;
+		}
+	} catch (const My::mysqlException& ex) {
+		cerr << "ERROR: " << ex.get_errorCause() << endl;
+		return ex.get_errorCode();
+	} catch (const My::WinSocketException& ex) {
+		cerr << "ERROR: " << ex.get_errorCause() << endl;
+		return ex.get_errorCode();
+	} catch (const std::exception& ex) {
+		cerr << "ERROR: " << ex.what() << endl;
+		return 1;
+	}
+	return 0;
+}
+#pragma endregion
 
 int main() { return 0; }

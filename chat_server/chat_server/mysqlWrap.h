@@ -1,8 +1,9 @@
 #pragma once
-#include<WinSock2.h>
+#include <WinSock2.h>
 #include <mysql.h>
 #include <exception>
 #include <string>
+#include <memory>
 
 class mysqlException : public std::exception {
 	int errorCode;
@@ -14,11 +15,14 @@ public:
 	inline const std::string& get_errorCause() { return errorCause; }
 };
 
-class mysqlWrap {
-	MYSQL descriptor;
+class mysqlWrap : public std::unique_ptr< MYSQL > {
+	typedef std::unique_ptr< MYSQL > base;
 public:
+	mysqlWrap() = default;
+	mysqlWrap(const mysqlWrap&) = delete;
+	mysqlWrap(mysqlWrap&&) = default;
+	mysqlWrap& operator = (mysqlWrap&&) = default;
 	mysqlWrap(const char * host, unsigned int port, const char * user, const char * password) throw (mysqlException);
-	inline MYSQL* get() { return &descriptor; }
-	~mysqlWrap();
+	virtual ~mysqlWrap();
 };
 
