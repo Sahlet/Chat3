@@ -774,18 +774,14 @@
 //}
 //
 
-#include <My\WinSockBaseSerialization.h>
-#include <My\thread_pool.h>
-#include "mysqlWrap.h"
-#include <iostream>
+#include "query_processing.h"
+
 using namespace My;
 using namespace std;
 
 const unsigned int max_conncectins_count = 0b11111111111111111;
 string BASEhost, BASEuser, BASEpassword;
 unsigned int BASEport;
-
-void query_processor(WinSocket sock, mysqlWrap& connection);
 
 int main(int argc, char *argv[]) {
 #pragma region Connecting to DATABASE
@@ -812,23 +808,41 @@ int main(int argc, char *argv[]) {
 			WinSocket sock;
 			sock.bind(WinSocketAddress("", 30000));
 			sock.listen(max_conncectins_count);
-			My::thread_pool< mysqlWrap& > pool(10, max_conncectins_count);
+			My::thread_pool< mysqlWrap& > pool(5, max_conncectins_count);
+			long long accepted = 0;
 			while (true) {
-				pool.add_task([&sock](mysqlWrap& connection){
-						query_processor(sock.accept(), connection);
+				auto socket = sock.accept();
+				cout << "accepted " << ++accepted << endl;
+				pool.add_task([socket](mysqlWrap& connection)
+					{
+						try {
+							if (!connection) {
+								connection = mysqlWrap(BASEhost.c_str(), BASEport, BASEuser.c_str(), BASEpassword.c_str());
+							}
+							query_processor(socket, connection);
+						} catch (const WinSocketException& ex) {
+							cerr << ex;
+						} catch (const mysqlException& ex) {
+							if  (
+									ex.get_errorCode() == ER_ABORTING_CONNECTION || // Aborted connection to database
+									ex.get_errorCode() == ER_NEW_ABORTING_CONNECTION || // Aborted connection to database
+									ex.get_errorCode() == CR_SERVER_LOST || // Lost connection to MySQL server during query
+									ex.get_errorCode() == CR_INVALID_CONN_HANDLE || // Invalid connection handle
+									ex.get_errorCode() == CR_SERVER_LOST_EXTENDED // Lost connection to MySQL server
+								) {
+								cerr << ex;
+								connection = mysqlWrap(BASEhost.c_str(), BASEport, BASEuser.c_str(), BASEpassword.c_str());
+							} else throw;
+						}
 					}
 				);
 			}
-		}
-		catch (...) {
+		} catch (...) {
 			cout << "server crashed.\n";
 			throw;
 		}
-	} catch (const My::mysqlException& ex) {
-		cerr << "ERROR: " << ex.get_errorCause() << endl;
-		return ex.get_errorCode();
-	} catch (const My::WinSocketException& ex) {
-		cerr << "ERROR: " << ex.get_errorCause() << endl;
+	} catch (const Exception& ex) {
+		cerr << ex;
 		return ex.get_errorCode();
 	} catch (const std::exception& ex) {
 		cerr << "ERROR: " << ex.what() << endl;
@@ -838,4 +852,4 @@ int main(int argc, char *argv[]) {
 }
 #pragma endregion
 
-int main() { return 0; }
+//int main() { return 0; }

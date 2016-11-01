@@ -24,12 +24,18 @@
     <ClCompile Include="C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\include\My\WinSockBaseSerialization.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="C:\Program Files %28x86%29\Microsoft Visual Studio 14.0\VC\include\My\Exception.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="C:\Program Files %28x86%29\Microsoft Visual Studio 14.0\VC\include\My\WinSocket.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\include\My\WinSockBaseSerialization.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Program Files %28x86%29\Microsoft Visual Studio 14.0\VC\include\My\Exception.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

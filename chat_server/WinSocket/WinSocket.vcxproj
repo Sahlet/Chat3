@@ -136,10 +136,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="C:\Program Files %28x86%29\Microsoft Visual Studio 14.0\VC\include\My\WinSocket.h" />
+    <ClInclude Include="C:\Program Files %28x86%29\Microsoft Visual Studio 14.0\VC\include\My\Exception.h" />
     <ClInclude Include="C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\include\My\WinSockBaseSerialization.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="C:\Program Files %28x86%29\Microsoft Visual Studio 14.0\VC\include\My\WinSocket.cpp" />
+    <ClCompile Include="C:\Program Files %28x86%29\Microsoft Visual Studio 14.0\VC\include\My\Exception.cpp" />
     <ClCompile Include="C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\include\My\WinSockBaseSerialization.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

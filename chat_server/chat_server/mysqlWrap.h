@@ -1,18 +1,17 @@
 #pragma once
 #include <WinSock2.h>
 #include <mysql.h>
-#include <exception>
-#include <string>
+#include <mysqld_error.h>
+#include <errmsg.h>
+#include <My/Exception.h>
 #include <memory>
 
-class mysqlException : public std::exception {
-	int errorCode;
-	std::string errorCause;
+class mysqlException : public My::Exception {
+protected:
+	mysqlException(long long errorCode, std::string errorCause, const char* what);
 public:
-	mysqlException(int errorCode = 0, std::string errorCause = "");
-	mysqlException(std::string errorCause, int errorCode = 0);
-	inline int get_errorCode() { return errorCode; }
-	inline const std::string& get_errorCause() { return errorCause; }
+	mysqlException(long long errorCode = 0, std::string errorCause = "");
+	mysqlException(std::string errorCause, long long errorCode = 0);
 };
 
 class mysqlWrap : public std::unique_ptr< MYSQL > {

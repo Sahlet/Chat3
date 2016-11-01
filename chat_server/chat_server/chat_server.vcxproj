@@ -73,6 +73,7 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="mysqlWrap.cpp" />
+    <ClCompile Include="query_processing.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Threading\Threading.vcxproj">
@@ -84,6 +85,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mysqlWrap.h" />
+    <ClInclude Include="query_processing.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

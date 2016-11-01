@@ -1,6 +1,0 @@
-﻿  mysqlWrap.cpp
-d:\книги\прога\7 семестр\базы данных\chat3\chat_server\chat_server\mysqlwrap.h(20): warning C4290: C++ exception specification ignored except to indicate a function is not __declspec(nothrow)
-d:\книги\прога\7 семестр\базы данных\chat3\chat_server\chat_server\mysqlwrap.cpp(7): warning C4290: C++ exception specification ignored except to indicate a function is not __declspec(nothrow)
-  main.cpp
-  Generating Code...
-  chat_server.vcxproj -> D:\Книги\Прога\7 семестр\Базы данных\Chat3\chat_server\Debug\chat_server.exe
