@@ -15,14 +15,14 @@ struct JSONReader : public std::enable_shared_from_this< JSONReader > {
 #define JSON(x,y,z) {	auto &e = json[z];   if(!e.is_null()) {convert(y, e);}	}
 #define JSON_DEFAULT_INIT(x,y,z) , y()
 
-#define JSON_class_gen(CLASS_NAME, CLASS_FIELDS_LIST, PUBLIC_CLASS_MEMBERS)					\
+#define JSON_class_gen(CLASS_NAME, CLASS_FIELDS_LIST, ...)									\
 struct CLASS_NAME : public JSONReader	{													\
 	virtual bool on_json(const json11::Json& json) override {								\
 		CLASS_FIELDS_LIST(JSON)																\
 		return true;																		\
 	}																						\
 public:																						\
-	PUBLIC_CLASS_MEMBERS																	\
+	__VA_ARGS__;																				\
 	using ptr = std::shared_ptr< CLASS_NAME >;												\
 	CLASS_FIELDS_LIST(CLASS_MEMBER)															\
 	CLASS_NAME() : JSONReader() CLASS_FIELDS_LIST(JSON_DEFAULT_INIT){}						\

@@ -166,6 +166,40 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 
 		return;
 	}
+
+	if (command::send_request_for_friendship == cmd) {
+		user_connection_identifier identifier_and_request;
+		send_request_to_friendRequest send_request_to_friend_request;
+		if (!identifier_and_request.parse(request.request)) return;
+		if (!send_request_to_friend_request.parse(identifier_and_request.request)) return;
+
+
+		if (!local_funcs::correct_reg_and_auth_params(sock, reg_request, request.request_key)) return;
+
+		std::string authResponse;
+
+		if (!user::authUser(connection, reg_request.login, reg_request.password, authResponse)) {
+			json11::Json json = json11::Json::object{
+				{ "request_key", request.request_key },
+				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
+				{ "response", "user with this loigin and password is not exist" }
+			};
+
+			sock << json.dump();
+
+			return;
+		}
+
+		json11::Json json = json11::Json::object{
+			{ "request_key", request.request_key },
+			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) },
+			{ "response", std::move(authResponse) }
+		};
+
+		sock << json.dump();
+
+		return;
+	}
 }
 //------------------------------------------------------------------------------
 
