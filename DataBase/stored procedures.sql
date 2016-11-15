@@ -6,13 +6,50 @@ USE my_chat;
 -- --------------------------------------------------------------------------------------
 DELIMITER //
 
-DROP PROCEDURE IF EXISTS AUTORIZATION//
-CREATE PROCEDURE AUTORIZATION(login VARCHAR(40), password BLOB)
+DROP PROCEDURE IF EXISTS AUTHORIZATION//
+CREATE PROCEDURE AUTHORIZATION(login VARCHAR(40), password BLOB)
 BEGIN
 	START TRANSACTION;
-		SELECT COUNT(*) FROM my_chat.users WHERE log = login AND pass = password;
+	SELECT id FROM my_chat.users WHERE log = login AND pass = password;
 	COMMIT;
 END//
+
+DROP PROCEDURE IF EXISTS GET_MY_INFO//
+CREATE PROCEDURE GET_MY_INFO(userID BIGINT UNSIGNED)
+BEGIN
+	START TRANSACTION;
+	SELECT 
+	log,
+	name,
+	status,
+	n_unread_chats,
+	n_requests,
+	avatar
+	FROM my_chat.users WHERE id = userID;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS GET_USER_INFO//
+CREATE PROCEDURE GET_USER_INFO(userID BIGINT UNSIGNED)
+BEGIN
+	START TRANSACTION;
+	SELECT 
+	log,
+	name,
+	avatar,
+	status
+	FROM my_chat.users WHERE id = userID;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS GET_USER_AVATAR//
+CREATE PROCEDURE GET_USER_AVATAR(userID BIGINT UNSIGNED)
+BEGIN
+	START TRANSACTION;
+	SELECT avatar FROM my_chat.users WHERE id = userID;
+	COMMIT;
+END//
+
 
 DROP PROCEDURE IF EXISTS GET_USER_ID//
 CREATE PROCEDURE GET_USER_ID(login VARCHAR(40))
@@ -26,7 +63,16 @@ DROP PROCEDURE IF EXISTS ADDUSER//
 CREATE PROCEDURE ADDUSER(login VARCHAR(40), password BLOB)
 BEGIN
 	START TRANSACTION;
-		INSERT INTO my_chat.users (log, pass) values(login, password);
+    -- INSERT INTO my_chat.users (log, pass) values(login, password);
+    
+		SET @count := (SELECT id FROM my_chat.users WHERE log = login);
+
+		IF (ISNULL(@count) OR @count = 0) THEN
+			INSERT INTO my_chat.users (log, pass) values(login, password);
+		ELSE
+			SELECT @count;
+		END IF;
+	
 	COMMIT;
 END//
 

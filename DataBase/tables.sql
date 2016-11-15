@@ -7,12 +7,12 @@ USE my_chat;
 DROP TABLE IF EXISTS my_chat.users;
 CREATE TABLE IF NOT EXISTS my_chat.users (
 	id SERIAL PRIMARY KEY,				-- SERIAL = BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE
-	log VARCHAR(40) NOT NULL UNIQUE, -- UNIQUE - не повторяестя значение этого поля в каждой строке
+	log VARCHAR(40) NOT NULL UNIQUE,	-- UNIQUE - не повторяестя значение этого поля в каждой строке
 	pass BLOB NOT NULL,
     n_unread_chats BIGINT UNSIGNED NOT NULL DEFAULT 0,
 	n_requests BIGINT UNSIGNED NOT NULL DEFAULT 0,
     -- public info
-    name VARCHAR(40),
+    name VARCHAR(40) DEFAULT NULL,
     avatar BLOB DEFAULT NULL,
 	status VARCHAR(255) NOT NULL DEFAULT '', -- статус
 	last_tick TIMESTAMP NOT NULL,	-- если не задать значение, то в переменной будет храниться время изменения (добавления) записи в диапазоне от «1970-01-01 00:00:00» до некоторой даты в 2038 г, ДЛЯ ОБНОВЛЕНИЯ ВРЕМЕНИ ИСПОЛЬЗУЙ ФУНКЦИЮ NOW() или CURRENT_TIMESTAMP //insert into dt1 values(now());
