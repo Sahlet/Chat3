@@ -38,41 +38,37 @@ void test(std::string login, std::string password) {
 
 	size_t password_size = password.size();
 
-	json11::Json json = json11::Json::object{
-		{ "login", std::move(login) },
-		{ "password", password.size() ? std::move(password) : "p" }
-	};
-
-	json = json11::Json::object{
+	s1 <<
+	json11::Json(json11::Json::object{
 		{ "request_key", 1 },
 		{ "cmd", to_string(password_size ? command::authorization : command::registration) },
-		{ "request", json.dump() }
-	};
-
-	s1 << json.dump();
+	}).dump()
+	<<
+	json11::Json(json11::Json::object{
+		{ "login", std::move(login) },
+		{ "password", password.size() ? std::move(password) : "p" }
+	}).dump();
 
 	std::string response_str;
 
 	s1 >> response_str;
-
 	responseJSON response;
 	response.parse(response_str);
 
 	if (password_size) {
+		s1 >> response_str;
 		AuthResponse authResponse;
-		authResponse.parse(response.response);
+		authResponse.parse(response_str);
 	}
 }
 
 void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception) {
-	std::string str_request;
-	sock >> str_request;
+	std::string request_str;
+	sock >> request_str;
 	server_Request request;
-
-	if (!request.parse(str_request)) return;
+	if (!request.parse(request_str)) return;
 
 	const command cmd = request.cmd;
-
 	if (command::unknown == cmd) {
 		std::cout << "unknown command" << std::endl;
 		return;
@@ -107,17 +103,18 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 	};
 
 	if (command::registration == cmd) {
+		sock >> request_str;
 		Auth_Reg_Request reg_request;
 
-		if (!reg_request.parse(request.request)) return;
+		if (!reg_request.parse(request_str)) return;
 		
 		if (!local_funcs::correct_reg_and_auth_params(sock, reg_request, request.request_key)) return;
 
 		if (!user::regUser(connection, reg_request.login, reg_request.password)) {
-			json11::Json json = json11::Json::object{
+			json11::Json json = json11::Json::object {
 				{ "request_key", request.request_key },
 				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
-				{ "response", "user with this loigin already exists" }
+				{ "cause", "user with this loigin already exists" }
 			};
 
 			sock << json.dump();
@@ -136,9 +133,10 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 	}
 
 	if (command::authorization == cmd) {
+		sock >> request_str;
 		Auth_Reg_Request reg_request;
 
-		if (!reg_request.parse(request.request)) return;
+		if (!reg_request.parse(request_str)) return;
 
 		if (!local_funcs::correct_reg_and_auth_params(sock, reg_request, request.request_key)) return;
 
@@ -148,7 +146,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 			json11::Json json = json11::Json::object {
 				{ "request_key", request.request_key },
 				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
-				{ "response", "user with this loigin and password is not exist" }
+				{ "cause", "user with this loigin and password is not exist" }
 			};
 
 			sock << json.dump();
@@ -158,42 +156,26 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 
 		json11::Json json = json11::Json::object {
 			{ "request_key", request.request_key },
-			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) },
-			{ "response", std::move(authResponse) }
+			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) }
 		};
 
-		sock << json.dump();
+		sock << json.dump() << authResponse;
 
 		return;
 	}
 
 	if (command::send_request_for_friendship == cmd) {
+		sock >> request_str;
 		user_connection_identifier identifier_and_request;
+		if (!identifier_and_request.parse(request_str)) return;
+
+		sock >> request_str;
 		send_request_to_friendRequest send_request_to_friend_request;
-		if (!identifier_and_request.parse(request.request)) return;
-		if (!send_request_to_friend_request.parse(identifier_and_request.request)) return;
+		if (!send_request_to_friend_request.parse(request_str)) return;
 
-
-		if (!local_funcs::correct_reg_and_auth_params(sock, reg_request, request.request_key)) return;
-
-		std::string authResponse;
-
-		if (!user::authUser(connection, reg_request.login, reg_request.password, authResponse)) {
-			json11::Json json = json11::Json::object{
-				{ "request_key", request.request_key },
-				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
-				{ "response", "user with this loigin and password is not exist" }
-			};
-
-			sock << json.dump();
-
-			return;
-		}
-
-		json11::Json json = json11::Json::object{
+		json11::Json json = json11::Json::object {
 			{ "request_key", request.request_key },
-			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) },
-			{ "response", std::move(authResponse) }
+			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) }
 		};
 
 		sock << json.dump();

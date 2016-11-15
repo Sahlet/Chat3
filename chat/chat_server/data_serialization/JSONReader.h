@@ -22,7 +22,7 @@ struct CLASS_NAME : public JSONReader	{													\
 		return true;																		\
 	}																						\
 public:																						\
-	__VA_ARGS__;																				\
+	__VA_ARGS__;																			\
 	using ptr = std::shared_ptr< CLASS_NAME >;												\
 	CLASS_FIELDS_LIST(CLASS_MEMBER)															\
 	CLASS_NAME() : JSONReader() CLASS_FIELDS_LIST(JSON_DEFAULT_INIT){}						\

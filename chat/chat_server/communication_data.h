@@ -19,7 +19,8 @@ EnumSerializer_declaration(CHAT_ACCESS);
 //------------------------------------------------------------------------------
 #define responseJSON_LIST(DEFINITION_NAME)\
 		DEFINITION_NAME(int, request_key, "request_key")\
-		DEFINITION_NAME(QUERY_RESPONSE_STATUS, status, "response_status")
+		DEFINITION_NAME(QUERY_RESPONSE_STATUS, status, "response_status")\
+		DEFINITION_NAME(std::string, cause, "cause")
 JSON_class_gen(responseJSON, responseJSON_LIST);
 //------------------------------------------------------------------------------
 #define user_infoJSON_LIST(DEFINITION_NAME)\
