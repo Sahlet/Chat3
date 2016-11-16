@@ -60,7 +60,7 @@ BEGIN
 END//
 
 DROP PROCEDURE IF EXISTS ADDUSER//
-CREATE PROCEDURE ADDUSER(login VARCHAR(40), password BLOB)
+CREATE PROCEDURE ADDUSER(login VARCHAR(40), password BLOB, max_userID BIGINT UNSIGNED)
 BEGIN
 	START TRANSACTION;
     -- INSERT INTO my_chat.users (log, pass) values(login, password);
@@ -69,8 +69,13 @@ BEGIN
 
 		IF (ISNULL(@count) OR @count = 0) THEN
 			INSERT INTO my_chat.users (log, pass) values(login, password);
-		ELSE
-			SELECT @count;
+            SET @userID = (SELECT last_insert_id());
+            IF (max_userID < @userID) THEN
+				DELETE FROM my_chat.users WHERE my_chat.users.id = @userID;
+			ELSE
+				SELECT @userID;
+            END IF;
+			
 		END IF;
 	
 	COMMIT;
@@ -92,6 +97,7 @@ BEGIN
 						SELECT (my_chat.chat_members.chat_id, my_chat.chat_members.user_id, @messageID)
 						FROM my_chat.chat_members
                         WHERE my_chat.chat_members.chat_id = chatID AND NOT ISNULL(my_chat.chat_members.access);
+			SELECT @messageID;
 		END IF;
     COMMIT;
 END//
@@ -136,6 +142,7 @@ BEGIN
             
             IF (ISNULL(@var) OR @var = 0) THEN
 				INSERT INTO my_chat.requests (user_id, requester_id, message) values(userID, requesterID, message_);
+                SELECT last_insert_id();
             END IF;
 		END IF;
     COMMIT;

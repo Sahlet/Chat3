@@ -102,6 +102,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 		}
 	};
 
+#pragma region registration
 	if (command::registration == cmd) {
 		sock >> request_str;
 		Auth_Reg_Request reg_request;
@@ -131,7 +132,8 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 
 		return;
 	}
-
+#pragma endregion
+#pragma region authorization
 	if (command::authorization == cmd) {
 		sock >> request_str;
 		Auth_Reg_Request reg_request;
@@ -163,15 +165,28 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 
 		return;
 	}
-
+#pragma endregion
+#pragma region send_request_for_friendship
 	if (command::send_request_for_friendship == cmd) {
 		sock >> request_str;
-		user_connection_identifier identifier_and_request;
-		if (!identifier_and_request.parse(request_str)) return;
+		user_connection_identifier identifier;
+		if (!identifier.parse(request_str)) return;
 
 		sock >> request_str;
 		send_request_to_friendRequest send_request_to_friend_request;
 		if (!send_request_to_friend_request.parse(request_str)) return;
+
+		if (!user::send_request_to_friend(connection, identifier.user_id, send_request_to_friend_request.user_id, send_request_to_friend_request.message)) {
+			json11::Json json = json11::Json::object{
+				{ "request_key", request.request_key },
+				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
+				{ "cause", "could not add request to friend" }
+			};
+
+			sock << json.dump();
+
+			return;
+		}
 
 		json11::Json json = json11::Json::object {
 			{ "request_key", request.request_key },
@@ -182,6 +197,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 
 		return;
 	}
+#pragma endregion
 }
 //------------------------------------------------------------------------------
 
@@ -230,6 +246,9 @@ bool user::regUser(mysqlWrap& connection, const std::string& login, const std::s
 	*end++ = '\'';
 	end += mysql_real_escape_string(connection.get(), end, password.c_str(), password.size());
 	*end++ = '\'';
+	*end++ = ',';
+	sprintf_s(end, sizeof(query) - (end - query), "%d", max_user_count - 1);
+	end += strlen(end);
 	*end++ = ')';
 
 	if (mysql_real_query(connection.get(), query, (unsigned int)(end - query))) throw connection.get_mysqlException(__FUNCTION__);
@@ -238,7 +257,7 @@ bool user::regUser(mysqlWrap& connection, const std::string& login, const std::s
 
 	connection.clean_query();
 
-	return bool(!query_res);
+	return bool(query_res);
 }
 bool user::authUser(mysqlWrap& connection, const std::string& login, const std::string& password, std::string& authResponse) throw (mysqlException) {
 	char query[300], *end;
@@ -262,16 +281,16 @@ bool user::authUser(mysqlWrap& connection, const std::string& login, const std::
 	MYSQL_ROW row = mysql_fetch_row(query_res.get());
 	int64_t user_id = atoll(row[0]);
 
-	return users[user_id].init(connection, authResponse);
+	return users()[user_id].init(connection, authResponse);
 }
 //------------------------------------------------------------------------------
 bool user::init(mysqlWrap& connection, std::string& authResponse) {
-	auto user_id = this - users;
+	auto user_id = this - users();
 	std::string avatar;
 	std::string connection_identifier;
 
 	std::lock_guard< std::mutex > lock(this->context_mutex);
-	
+
 	char query[100], *end;
 
 	end = strmov(query, context ? "CALL my_chat.GET_USER_AVATAR(" : "CALL my_chat.GET_MY_INFO(");
@@ -306,16 +325,16 @@ bool user::init(mysqlWrap& connection, std::string& authResponse) {
 
 	connection_identifier = maker::random_str_make(context->individual_number++);
 
-	context->individuals[connection_identifier] = user_context::individual_user_context(context.get());
+	context->individuals[connection_identifier] = user_context::individual_user_context(*context.get());
 
-	json11::Json user_info = json11::Json::object {
+	json11::Json user_info = json11::Json::object{
 		{ "user_id", user_id },
 		{ "user_name", context->user_name },
 		{ "user_status", context->status },
 		{ "avatar", std::move(avatar) }
 	};
 
-	json11::Json authInfo = json11::Json::object {
+	json11::Json authInfo = json11::Json::object{
 		{ "user_info", std::move(user_info) },
 		{ "n_unread_chats" , context->n_unread_chats },
 		{ "n_requests", context->n_requests },
@@ -326,10 +345,77 @@ bool user::init(mysqlWrap& connection, std::string& authResponse) {
 
 	return true;
 }
+
+void request_to_friend_sended(const int64_t& sender_user_id, const int64_t& receiver_user_id) {
+	add_task([sender_user_id, receiver_user_id](mysqlWrap& connection) {
+
+	});
+}
+bool user::send_request_to_friend(mysqlWrap& connection, const int64_t& sender_user_id, const int64_t& receiver_user_id, const std::string& message) throw (mysqlException) {
+	std::string query;
+	char *end;
+	query.resize(message.size() + 100);
+
+	end = strmov(const_cast< char* >(query.c_str()), "CALL SEND_REQUEST(");
+	sprintf_s(end, 100 - (end - query.c_str()), "%d", int(sender_user_id));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, 100 - (end - query.c_str()), "%d", int(receiver_user_id));
+	end += strlen(end);
+	*end++ = ',';
+	*end++ = '\'';
+	end += mysql_real_escape_string(connection.get(), end, message.c_str(), message.size());
+	*end++ = '\'';
+	*end++ = ')';
+
+	if (mysql_real_query(connection.get(), query.c_str(), (unsigned int)(end - query.c_str()))) throw connection.get_mysqlException(__FUNCTION__);
+
+	auto query_res = connection.store_result();
+	connection.clean_query();
+
+	if (!mysql_num_rows(query_res.get())) return false;
+	
+	request_to_friend_sended(sender_user_id, receiver_user_id);
+	return true;
+}
+void message_sended(int64_t chat_id, int64_t user_id, int64_t message_id) {
+	add_task([chat_id, user_id, message_id] (mysqlWrap& connection){
+
+	});
+}
+bool user::send_message(mysqlWrap& connection, const int64_t& user_id, const int64_t& chat_id, const std::string& message) throw (mysqlException) {
+	std::string query;
+	char *end;
+	query.resize(message.size() + 100);
+
+	end = strmov(const_cast< char* >(query.c_str()), "CALL SEND_CHAT_MESSAGE.(");
+	sprintf_s(end, 100 - (end - query.c_str()), "%d", int(user_id));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, 100 - (end - query.c_str()), "%d", int(chat_id));
+	end += strlen(end);
+	*end++ = ',';
+	*end++ = '\'';
+	end += mysql_real_escape_string(connection.get(), end, message.c_str(), message.size());
+	*end++ = '\'';
+	*end++ = ')';
+
+	if (mysql_real_query(connection.get(), query.c_str(), (unsigned int)(end - query.c_str()))) throw connection.get_mysqlException(__FUNCTION__);
+
+	auto query_res = connection.store_result();
+	connection.clean_query();
+
+	if (!mysql_num_rows(query_res.get())) return false;
+	MYSQL_ROW row = mysql_fetch_row(query_res.get());
+	int64_t message_id = atoll(row[0]);
+
+	message_sended(chat_id, user_id, message_id);
+	return true;
+}
 //------------------------------------------------------------------------------
-user::user_context::individual_user_context::individual_user_context(const user::user_context* context) :
-	n_unread_chats(context->n_unread_chats),
-	n_requests(context->n_requests)
+user::user_context::individual_user_context::individual_user_context(const user::user_context& context) :
+	n_unread_chats(context.n_unread_chats),
+	n_requests(context.n_requests)
 {}
 
 //------------------------------------------------------------------------------

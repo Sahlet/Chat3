@@ -7,10 +7,34 @@ const unsigned int max_conncectins_count = 0b11111111111111111;
 const unsigned int max_user_count = 0b111111111111111111111;
 
 std::unique_ptr < user, std::default_delete < user[] > > users_guard;
-user* users;
-
+user* users() { return users_guard.get(); }
+My::thread_pool< mysqlWrap& >* pool = nullptr;
 string BASEhost, BASEuser, BASEpassword;
 unsigned int BASEport;
+
+void add_task(std::function< void(mysqlWrap& connection) > funk) {
+	pool->add_task([funk](mysqlWrap& connection) {
+		try {
+			if (!connection) {
+				connection = mysqlWrap(BASEhost.c_str(), BASEport, BASEuser.c_str(), BASEpassword.c_str());
+			}
+			funk(connection);
+		}
+		catch (const mysqlException& ex) {
+			if (
+				ex.get_errorCode() == ER_ABORTING_CONNECTION || // Aborted connection to database
+				ex.get_errorCode() == ER_NEW_ABORTING_CONNECTION || // Aborted connection to database
+				ex.get_errorCode() == CR_SERVER_LOST || // Lost connection to MySQL server during query
+				ex.get_errorCode() == CR_INVALID_CONN_HANDLE || // Invalid connection handle
+				ex.get_errorCode() == CR_SERVER_LOST_EXTENDED // Lost connection to MySQL server
+				) {
+				cerr << ex;
+				connection = mysqlWrap(BASEhost.c_str(), BASEport, BASEuser.c_str(), BASEpassword.c_str());
+			}
+			else throw;
+		}
+	});
+}
 
 int main(int argc, char *argv[]) {
 	LOG_FILES::out = stdout;
@@ -46,7 +70,6 @@ int main(int argc, char *argv[]) {
 		
 #pragma endregion
 		users_guard.reset(new user[max_user_count]);
-		users = users_guard.get();
 		try {
 			struct joiner_guard {
 				My::interruptible_thread& thread;
@@ -61,7 +84,7 @@ int main(int argc, char *argv[]) {
 					while (true) {
 						for (int i = 0; i < max_user_count; i++) {
 							My::interruption_point();
-							users[i].clear_old_contexts();
+							users()[i].clear_old_contexts();
 							if (!(i % 1000)) std::this_thread::yield();
 						}
 						std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -92,8 +115,10 @@ int main(int argc, char *argv[]) {
 			u_long ioctlsocket_arg = 1;
 			if (::ioctlsocket(sock.get(), FIONBIO, &ioctlsocket_arg) == SOCKET_ERROR) throw My::WinSocketException("main: error in ::ioctlsocket for sock.");
 			My::thread_pool< mysqlWrap& > pool(3, max_conncectins_count);
+			::pool = &pool;
 
 			//pool.add_task([] { test("l1"); });
+			pool.add_task([] { test("l1", "p"); });
 			pool.add_task([] { test("l1", "p"); });
 
 			long long accepted = 0;
@@ -117,26 +142,11 @@ int main(int argc, char *argv[]) {
 				}
 				cout << "accepted " << ++accepted << endl;
 				WinSocket socket = std::move(*socket_guard);
-				pool.add_task([socket](mysqlWrap& connection)
-					{
+				add_task([socket](mysqlWrap& connection) {
 						try {
-							if (!connection) {
-								connection = mysqlWrap(BASEhost.c_str(), BASEport, BASEuser.c_str(), BASEpassword.c_str());
-							}
 							query_processor(socket, connection);
 						} catch (const WinSocketException& ex) {
 							cerr << ex;
-						} catch (const mysqlException& ex) {
-							if  (
-									ex.get_errorCode() == ER_ABORTING_CONNECTION || // Aborted connection to database
-									ex.get_errorCode() == ER_NEW_ABORTING_CONNECTION || // Aborted connection to database
-									ex.get_errorCode() == CR_SERVER_LOST || // Lost connection to MySQL server during query
-									ex.get_errorCode() == CR_INVALID_CONN_HANDLE || // Invalid connection handle
-									ex.get_errorCode() == CR_SERVER_LOST_EXTENDED // Lost connection to MySQL server
-								) {
-								cerr << ex;
-								connection = mysqlWrap(BASEhost.c_str(), BASEport, BASEuser.c_str(), BASEpassword.c_str());
-							} else throw;
 						}
 					}
 				);
