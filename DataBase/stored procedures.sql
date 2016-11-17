@@ -23,8 +23,7 @@ BEGIN
 	name,
 	status,
 	n_unread_chats,
-	n_requests,
-	avatar
+	n_requests
 	FROM my_chat.users WHERE id = userID;
 	COMMIT;
 END//
@@ -36,8 +35,18 @@ BEGIN
 	SELECT 
 	log,
 	name,
-	avatar,
-	status
+	status,
+    UNIX_TIMESTAMP(last_tick)
+	FROM my_chat.users WHERE id = userID;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS GET_USER_AVATAR//
+CREATE PROCEDURE GET_USER_AVATAR(userID BIGINT UNSIGNED)
+BEGIN
+	START TRANSACTION;
+	SELECT 
+	avatar
 	FROM my_chat.users WHERE id = userID;
 	COMMIT;
 END//
@@ -210,6 +219,22 @@ CREATE PROCEDURE USER_ONLINE(userID BIGINT UNSIGNED)
 BEGIN
 	START TRANSACTION;
 		UPDATE my_chat.users SET last_tick = NOW() WHERE id = userID;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS SET_STATUS//
+CREATE PROCEDURE SET_STATUS(userID BIGINT UNSIGNED, status_ TEXT)
+BEGIN
+	START TRANSACTION;
+		UPDATE my_chat.users SET status = status_ WHERE id = userID;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS SET_AVATAR//
+CREATE PROCEDURE SET_AVATAR(userID BIGINT UNSIGNED, avatar_ TEXT)
+BEGIN
+	START TRANSACTION;
+		UPDATE my_chat.users SET avatar = avatar_ WHERE id = userID;
 	COMMIT;
 END//
 

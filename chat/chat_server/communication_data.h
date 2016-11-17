@@ -27,6 +27,7 @@ JSON_class_gen(responseJSON, responseJSON_LIST);
 		DEFINITION_NAME(int64_t, user_id, "user_id")\
 		DEFINITION_NAME(std::string, user_name, "user_name")\
 		DEFINITION_NAME(std::string, status, "user_status")\
+		DEFINITION_NAME(int64_t, unix_time_last_tick, "unix_time_last_tick")\
 		DEFINITION_NAME(std::string, avatar, "avatar")
 JSON_class_gen(user_infoJSON, user_infoJSON_LIST);
 //------------------------------------------------------------------------------
@@ -140,16 +141,6 @@ JSON_class_gen(send_messageRequest, send_messageRequest_LIST);
 		DEFINITION_NAME(int64_t, user_id, "user_id")\
 		DEFINITION_NAME(std::string, message, "message")
 JSON_class_gen(send_request_to_friendRequest, send_request_to_friendRequest_LIST);
-//------------------------------------------------------------------------------
-//задать статус
-#define set_statusRequest_LIST(DEFINITION_NAME)\
-		DEFINITION_NAME(std::string, status, "status")
-JSON_class_gen(set_statusRequest, set_statusRequest_LIST);
-//------------------------------------------------------------------------------
-//задать аватар
-#define set_avatarRequest_LIST(DEFINITION_NAME)\
-		DEFINITION_NAME(std::string, status, "status")
-JSON_class_gen(set_avatarRequest, set_avatarRequest_LIST);
 //------------------------------------------------------------------------------
 
 

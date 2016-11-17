@@ -7,6 +7,10 @@ std::array< const char*, size_t(command::get_users) + 1 > comands_in_bite_interp
 	"registration",
 	//---------------------
 	"polling",
+	//---------------------
+	"set_status",
+	"set_avatar",
+	//---------------------
 	"send_message",
 	"send_request_for_friendship",
 	"accept_request_for_friendship",

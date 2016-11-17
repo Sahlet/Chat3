@@ -7,6 +7,9 @@ enum class command : int {
 	//---------------------
 	polling, //опрос изменений
 	//---------------------
+	set_status,
+	set_avatar,
+	//---------------------
 	send_message,
 	send_request_for_friendship,
 	accept_request_for_friendship,
