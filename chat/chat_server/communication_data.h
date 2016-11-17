@@ -46,7 +46,8 @@ JSON_class_gen(AuthResponse, AuthResponse_LIST);
 #define chatJSON_LIST(DEFINITION_NAME)\
 		DEFINITION_NAME(int64_t, chat_id, "chat_id")\
 		DEFINITION_NAME(std::string, chat_name, "chat_name")\
-		DEFINITION_NAME(std::string, chat_avatar, "chat_avatar")
+		DEFINITION_NAME(std::string, chat_avatar, "chat_avatar")\
+		DEFINITION_NAME(CHAT_ACCESS, my_chat_access, "my_chat_access")
 JSON_class_gen(chatJSON, chatJSON_LIST);
 JSONList_gen(chatJSON, "chats");
 //------------------------------------------------------------------------------
@@ -86,11 +87,6 @@ JSONList_gen(friendJSON, "friends");
 		DEFINITION_NAME(std::string, request_message, "request_message")
 JSON_class_gen(request_to_friendJSON, request_to_friendJSON_LIST);
 JSONList_gen(request_to_friendJSON, "requests_to_friend");
-//------------------------------------------------------------------------------
-#define Response_LIST(DEFINITION_NAME)\
-		DEFINITION_NAME(int, request_key, "request_key")\
-		DEFINITION_NAME(std::string, response, "response")
-JSON_class_gen(Response, Response_LIST, ;);
 //------------------------------------------------------------------------------
 #pragma endregion
 
@@ -152,6 +148,16 @@ JSON_class_gen(send_messageRequest, send_messageRequest_LIST);
 		DEFINITION_NAME(std::string, message, "message")
 JSON_class_gen(send_request_to_friendRequest, send_request_to_friendRequest_LIST);
 //------------------------------------------------------------------------------
-
+//принять запрос в друзья
+#define accept_request_for_friendRequest_LIST(DEFINITION_NAME)\
+		DEFINITION_NAME(int64_t, user_id, "user_id")
+JSON_class_gen(accept_request_for_friendRequest, accept_request_for_friendRequest_LIST);
+//------------------------------------------------------------------------------
+//отослать запрос в друзья
+#define create_chatRequest_LIST(DEFINITION_NAME)\
+		DEFINITION_NAME(std::string, chat_name, "chat_name")\
+		DEFINITION_NAME(std::string, chat_avatar, "chat_avatar")
+JSON_class_gen(create_chateRequest, create_chatRequest_LIST);
+//------------------------------------------------------------------------------
 
 #pragma endregion

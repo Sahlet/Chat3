@@ -13,7 +13,7 @@ enum class command : int {
 	send_message,
 	send_request_for_friendship,
 	accept_request_for_friendship,
-	creat_chat,
+	create_chat,
 	//---------------------
 	// chat modifies
 	add_chat_member,

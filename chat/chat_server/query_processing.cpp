@@ -270,7 +270,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 	}
 #pragma endregion
 #pragma region get_user_info
-	if (command::get_user_data == cmd) {
+	if (command::get_user_info == cmd) {
 		sock >> request_str;
 		get_user_infoRequest get_user_info;
 		if (!get_user_info.parse(request_str)) return;
@@ -332,12 +332,79 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 #pragma region accept_request_for_friendship
 	if (command::accept_request_for_friendship == cmd) {
 		sock >> request_str;
+		accept_request_for_friendRequest accept_request_for_friend;
+		if (!accept_request_for_friend.parse(request_str)) return;
+
+		int64_t friend_chat_id;
+
+		if (!user::accept_request_for_friend(connection, identifier.user_id, accept_request_for_friend.user_id, friend_chat_id)) {
+			json11::Json json = json11::Json::object {
+				{ "request_key", request.request_key },
+				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
+				{ "cause", "could not accept request for friendship" }
+			};
+
+			sock << json.dump();
+
+			return;
+		}
+
+		sock
+		<<
+		json11::Json(json11::Json::object {
+			{ "request_key", request.request_key },
+			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) }
+		}).dump()
+		<<
+		json11::Json(json11::Json::object{
+			{ "chat_id", friend_chat_id }
+		}).dump();
+
 		return;
 	}
 #pragma endregion
 #pragma region creat_chat
-	if (command::creat_chat == cmd) {
+	if (command::create_chat == cmd) {
 		sock >> request_str;
+		create_chateRequest create_chate;
+		if (!create_chate.parse(request_str)) return;
+
+		if (create_chate.chat_name.size() > 125) {
+			json11::Json json = json11::Json::object{
+				{ "request_key", request.request_key },
+				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
+				{ "cause", "too long chat name" }
+			};
+
+			sock << json.dump();
+
+			return;
+		}
+
+		int64_t chat_id;
+		if (!user::create_chat(connection, identifier.user_id, create_chate.chat_name, create_chate.chat_avatar, chat_id)) {
+			json11::Json json = json11::Json::object{
+				{ "request_key", request.request_key },
+				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
+				{ "cause", "could not accept creat chat" }
+			};
+
+			sock << json.dump();
+
+			return;
+		}
+
+		sock
+		<<
+		json11::Json(json11::Json::object{
+			{ "request_key", request.request_key },
+			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) }
+		}).dump()
+		<<
+		json11::Json(json11::Json::object{
+			{ "chat_id", chat_id }
+		}).dump();
+
 		return;
 	}
 #pragma endregion
@@ -369,6 +436,11 @@ void request_to_friend_sended(const int64_t& sender_user_id, const int64_t& rece
 }
 void message_sended(int64_t chat_id, int64_t user_id, int64_t message_id) {
 	add_task([chat_id, user_id, message_id](mysqlWrap& connection) {
+
+	});
+}
+void request_to_friend_accepted(const int64_t& user_id, const int64_t& requester_id, const int64_t& friend_chat_id) {
+	add_task([user_id, requester_id, friend_chat_id](mysqlWrap& connection) {
 
 	});
 }
@@ -439,7 +511,7 @@ bool user::authUser(mysqlWrap& connection, const std::string& login, const std::
 bool user::send_request_to_friend(mysqlWrap& connection, const int64_t& sender_user_id, const int64_t& receiver_user_id, const std::string& message) throw (mysqlException) {
 	std::string query;
 	char *end;
-	query.resize(message.size() + 100);
+	query.resize(message.size()*2 + 1 + 100);
 
 	end = strmov(const_cast< char* >(query.c_str()), "CALL SEND_REQUEST(");
 	sprintf_s(end, 100 - (end - query.c_str()), "%d", int(sender_user_id));
@@ -466,7 +538,7 @@ bool user::send_request_to_friend(mysqlWrap& connection, const int64_t& sender_u
 bool user::send_message(mysqlWrap& connection, const int64_t& user_id, const int64_t& chat_id, const std::string& message) throw (mysqlException) {
 	std::string query;
 	char *end;
-	query.resize(message.size() + 100);
+	query.resize(message.size()*2 + 1 + 100);
 
 	end = strmov(const_cast< char* >(query.c_str()), "CALL SEND_CHAT_MESSAGE(");
 	sprintf_s(end, 100 - (end - query.c_str()), "%d", int(user_id));
@@ -495,7 +567,7 @@ bool user::send_message(mysqlWrap& connection, const int64_t& user_id, const int
 bool user::set_user_str_param(mysqlWrap& connection, const std::string& PARAM_NAME, const int64_t& user_id, const std::string& param) throw (mysqlException) {
 	std::string query;
 	char *end;
-	query.resize(PARAM_NAME.size() + param.size() + 100);
+	query.resize(PARAM_NAME.size() + param.size()*2 + 1 + 100);
 
 	end = strmov(const_cast< char* >(query.c_str()), "CALL SET_");
 	end = strmov(end, PARAM_NAME.c_str());
@@ -517,6 +589,59 @@ bool user::set_status(mysqlWrap& connection, const int64_t& user_id, const std::
 }
 bool user::set_avatar(mysqlWrap& connection, const int64_t& user_id, const std::string& avatar) throw (mysqlException) {
 	return user::set_user_str_param(connection, "AVATAR", user_id, avatar);
+}
+bool user::accept_request_for_friend(mysqlWrap& connection, const int64_t& user_id, const int64_t& requester_id, int64_t& friend_chat_id) throw (mysqlException) {
+	char query[100];
+	char *end;
+
+	end = strmov(const_cast< char* >(query), "CALL ACCEPT_REQUEST(");
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(user_id));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(requester_id));
+	end += strlen(end);
+	*end++ = ')';
+
+	if (mysql_real_query(connection.get(), query, (unsigned int)(end - query))) throw connection.get_mysqlException(__FUNCTION__);
+
+	auto query_res = connection.store_result();
+	connection.clean_query();
+
+	if (!mysql_num_rows(query_res.get())) return false;
+	MYSQL_ROW row = mysql_fetch_row(query_res.get());
+	friend_chat_id = atoll(row[0]);
+
+	request_to_friend_accepted(user_id, requester_id, friend_chat_id);
+	return true;
+}
+bool user::create_chat(mysqlWrap& connection, const int64_t& user_id, const std::string& chat_name, const std::string& chat_avatar, int64_t& chat_id) throw (mysqlException) {
+	std::string query;
+	char *end;
+	query.resize((chat_name.size() + chat_avatar.size())*2 + 1 + 100);
+
+	end = strmov(const_cast< char* >(query.c_str()), "CALL CREATE_CHAT(");
+	sprintf_s(end, 100 - (end - query.c_str()), "%d", int(user_id));
+	end += strlen(end);
+	*end++ = ',';
+	*end++ = '\'';
+	end += mysql_real_escape_string(connection.get(), end, chat_name.c_str(), chat_name.size());
+	*end++ = '\'';
+	*end++ = ',';
+	*end++ = '\'';
+	end += mysql_real_escape_string(connection.get(), end, chat_avatar.c_str(), chat_avatar.size());
+	*end++ = '\'';
+	*end++ = ')';
+
+	if (mysql_real_query(connection.get(), query.c_str(), (unsigned int)(end - query.c_str()))) throw connection.get_mysqlException(__FUNCTION__);
+
+	auto query_res = connection.store_result();
+	connection.clean_query();
+
+	if (!mysql_num_rows(query_res.get())) return false;
+	MYSQL_ROW row = mysql_fetch_row(query_res.get());
+	chat_id = atoll(row[0]);
+
+	return true;
 }
 //------------------------------------------------------------------------------
 bool user::init(mysqlWrap& connection, std::string& authResponse) {

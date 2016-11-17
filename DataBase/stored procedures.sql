@@ -140,12 +140,13 @@ BEGIN
 END//
 
 DROP PROCEDURE IF EXISTS CREATE_CHAT//
-CREATE PROCEDURE CREATE_CHAT(userID BIGINT UNSIGNED)
+CREATE PROCEDURE CREATE_CHAT(userID BIGINT UNSIGNED, chat_name VARCHAR(255), chat_avatar_ BLOB)
 BEGIN
 	START TRANSACTION;
-		INSERT INTO my_chat.chats (/*chat_name, avatar*/) values(/*chat_name_, avatar_*/);
+		INSERT INTO my_chat.chats (chat_name, avatar) values(chat_name_, chat_avatar_);
         SET @chatID = (SELECT last_insert_id());
         INSERT INTO my_chat.chat_members (chat_id, user_id, access) values(@chatID, userID, 'a');
+        SELECT @chatID;
 	COMMIT;
 END//
 
@@ -180,9 +181,9 @@ BEGIN
             SET @minID = LEAST(userID, requesterID);
 			SET @maxID = GREATEST(userID, requesterID);
             
-            SET @var = (SELECT COUNT(*) FROM my_chat.friends_chats WHERE user_id1 = @minID AND user_id2 = @maxID);
+            SET @chatID = (SELECT chat_id FROM my_chat.friends_chats WHERE user_id1 = @minID AND user_id2 = @maxID);
             
-            IF (ISNULL(@var) OR @var = 0) THEN
+            IF (ISNULL(@chatID)) THEN
 				INSERT INTO my_chat.chats () values()/*(chat_name, avatar) values(NULL, NULL)*/;
 				SET @chatID = (SELECT last_insert_id());
 				INSERT INTO my_chat.chat_members (chat_id, user_id, access) values(@chatID, userID, 'u');
@@ -193,6 +194,8 @@ BEGIN
             
             INSERT INTO my_chat.friends (user_id, friend_id) values (userID, requesterID);
             INSERT INTO my_chat.friends (user_id, friend_id) values (requesterID, userID);
+            
+            SELECT @chatID;
 		END IF;
     COMMIT;
 END//
@@ -241,7 +244,7 @@ BEGIN
 END//
 
 DROP PROCEDURE IF EXISTS SET_AVATAR//
-CREATE PROCEDURE SET_AVATAR(userID BIGINT UNSIGNED, avatar_ TEXT)
+CREATE PROCEDURE SET_AVATAR(userID BIGINT UNSIGNED, avatar_ BLOB)
 BEGIN
 	START TRANSACTION;
 		UPDATE my_chat.users SET avatar = avatar_ WHERE id = userID;
