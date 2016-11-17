@@ -19,7 +19,7 @@ enum class command : int {
 	add_chat_member,
 	set_chat_member_access,
 	//---------------------
-	get_user_data,
+	get_user_info,
 	get_last_user_tick,
 	//---------------------
 	get_chat_members,

@@ -68,6 +68,7 @@ public:
 	static bool set_avatar(mysqlWrap& connection, const int64_t& user_id, const std::string& avatar) throw (mysqlException);
 	
 	bool user::get_user_info(mysqlWrap& connection, std::string& user_info_Response) const throw (mysqlException);
+	bool user::get_user_last_tick(mysqlWrap& connection, std::string& user_last_tick_Response) const throw (mysqlException);
 
 	user();
 	~user();

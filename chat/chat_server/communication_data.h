@@ -31,6 +31,11 @@ JSON_class_gen(responseJSON, responseJSON_LIST);
 		DEFINITION_NAME(std::string, avatar, "avatar")
 JSON_class_gen(user_infoJSON, user_infoJSON_LIST);
 //------------------------------------------------------------------------------
+#define user_last_tickJSON_LIST(DEFINITION_NAME)\
+		DEFINITION_NAME(int64_t, user_id, "user_id")\
+		DEFINITION_NAME(int64_t, unix_time_last_tick, "unix_time_last_tick")
+JSON_class_gen(user_last_tickJSON, user_last_tickJSON_LIST);
+//------------------------------------------------------------------------------
 #define AuthResponse_LIST(DEFINITION_NAME)\
 		DEFINITION_NAME(user_infoJSON, user_info, "user_info")\
 		DEFINITION_NAME(int, n_unread_chats, "n_unread_chats")\
@@ -110,6 +115,11 @@ JSON_class_gen(user_connection_identifier, user_connection_identifier_LIST);
 #define get_user_infoRequest_LIST(DEFINITION_NAME)\
 		DEFINITION_NAME(int64_t, user_id, "user_id")
 JSON_class_gen(get_user_infoRequest, get_user_infoRequest_LIST);
+//------------------------------------------------------------------------------
+//взять last_tick пользователя
+#define get_user_last_tickRequest_LIST(DEFINITION_NAME)\
+		DEFINITION_NAME(int64_t, user_id, "user_id")
+JSON_class_gen(get_user_last_tickRequest, get_user_last_tickRequest_LIST);
 //------------------------------------------------------------------------------
 //взять друзей пользователя (в ответе нет chat_id)
 #define get_user_friendsRequest_LIST(DEFINITION_NAME)\

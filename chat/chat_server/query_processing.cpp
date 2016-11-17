@@ -181,12 +181,14 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 		return;
 	}
 #pragma endregion
+
+	sock >> request_str;
+	user_connection_identifier identifier;
+	if (!identifier.parse(request_str)) return;
+	if (!local_funcs::online_check(sock, identifier, request.request_key)) return;
+
 #pragma region send_request_for_friendship
 	if (command::send_request_for_friendship == cmd) {
-		sock >> request_str;
-		user_connection_identifier identifier;
-		if (!identifier.parse(request_str)) return;
-		if (!local_funcs::online_check(sock, identifier, request.request_key)) return;
 		sock >> request_str;
 		send_request_to_friendRequest send_request_to_friend_request;
 		if (!send_request_to_friend_request.parse(request_str)) return;
@@ -216,10 +218,6 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 #pragma region send_message
 	if (command::send_message == cmd) {
 		sock >> request_str;
-		user_connection_identifier identifier;
-		if (!identifier.parse(request_str)) return;
-		if (!local_funcs::online_check(sock, identifier, request.request_key)) return;
-		sock >> request_str;
 		send_messageRequest send_message_request;
 		if (!send_message_request.parse(request_str)) return;
 
@@ -248,10 +246,6 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 #pragma region set_status_or_avatar
 	if (command::set_status == cmd || command::set_avatar == cmd) {
 		sock >> request_str;
-		user_connection_identifier identifier;
-		if (!identifier.parse(request_str)) return;
-		if (!local_funcs::online_check(sock, identifier, request.request_key)) return;
-		sock >> request_str;
 
 		if (!user::set_user_str_param(connection, command::set_status == cmd ? "STATUS" : "AVATAR", identifier.user_id, request_str)) {
 			json11::Json json = json11::Json::object {
@@ -278,10 +272,6 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 #pragma region get_user_info
 	if (command::get_user_data == cmd) {
 		sock >> request_str;
-		user_connection_identifier identifier;
-		if (!identifier.parse(request_str)) return;
-		if (!local_funcs::online_check(sock, identifier, request.request_key)) return;
-		sock >> request_str;
 		get_user_infoRequest get_user_info;
 		if (!get_user_info.parse(request_str)) return;
 
@@ -306,6 +296,48 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 
 		sock << json.dump() << user_info_Response;
 
+		return;
+	}
+#pragma endregion
+#pragma region get_last_user_tick
+	if (command::get_last_user_tick == cmd) {
+		sock >> request_str;
+		get_user_last_tickRequest get_user_last_tick;
+		if (!get_user_last_tick.parse(request_str)) return;
+
+		std::string user_last_tick_Response;
+
+		if (!users()[get_user_last_tick.user_id].get_user_last_tick(connection, user_last_tick_Response)) {
+			json11::Json json = json11::Json::object{
+				{ "request_key", request.request_key },
+				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
+				{ "cause", "could not get user last_tick" }
+			};
+
+			sock << json.dump();
+
+			return;
+		}
+
+		json11::Json json = json11::Json::object{
+			{ "request_key", request.request_key },
+			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) }
+		};
+
+		sock << json.dump() << user_last_tick_Response;
+
+		return;
+	}
+#pragma endregion
+#pragma region accept_request_for_friendship
+	if (command::accept_request_for_friendship == cmd) {
+		sock >> request_str;
+		return;
+	}
+#pragma endregion
+#pragma region creat_chat
+	if (command::creat_chat == cmd) {
+		sock >> request_str;
 		return;
 	}
 #pragma endregion
@@ -637,6 +669,43 @@ bool user::get_user_info(mysqlWrap& connection, std::string& user_info_Response)
 	};
 
 	user_info_Response = user_info.dump();
+
+	return true;
+}
+bool user::get_user_last_tick(mysqlWrap& connection, std::string& user_last_tick_Response) const throw (mysqlException) {
+	auto user_id = this - users();
+	int64_t last_tick = 0;
+
+	char query[100], *end;
+
+	std::unique_lock< std::mutex > lock(this->context_mutex);
+	if (!context) {
+		lock.unlock();
+		end = strmov(query, "CALL my_chat.GET_USER_LAST_TICK(");
+		sprintf_s(end, sizeof(query) - (end - query), "%d", user_id);
+		end += strlen(end);
+		*end++ = ')';
+
+		if (mysql_real_query(connection.get(), query, (unsigned int)(end - query))) throw connection.get_mysqlException(__FUNCTION__);
+		else {
+			auto query_res = connection.store_result();
+			connection.clean_query();
+
+			if (!mysql_num_rows(query_res.get())) return false;
+
+			MYSQL_ROW row = mysql_fetch_row(query_res.get());
+			auto length = mysql_fetch_lengths(query_res.get());
+
+			last_tick = atoll(row[0]);
+		}
+	} else last_tick = context->last_tick;
+
+	json11::Json user_info = json11::Json::object{
+		{ "user_id", user_id },
+		{ "unix_time_last_tick", last_tick }
+	};
+
+	user_last_tick_Response = user_info.dump();
 
 	return true;
 }
