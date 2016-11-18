@@ -251,5 +251,61 @@ BEGIN
 	COMMIT;
 END//
 
+DROP PROCEDURE IF EXISTS FIND_USER//
+CREATE PROCEDURE FIND_USER(regular_user_name VARCHAR(40), offset_ BIGINT UNSIGNED, number BIGINT UNSIGNED)
+BEGIN
+	START TRANSACTION;
+		SELECT my_chat.users.user_id FROM my_chat.users
+			WHERE (my_chat.users.name REGEXP regular_user_name) OR (my_chat.users.log REGEXP regular_user_name)
+            ORDER BY my_chat.users.user_id ASC
+            LIMIT offset_, number
+        ;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS FIND_USER_WITH_ID_GREATER_THEN_pred_userID//
+CREATE PROCEDURE FIND_USER_WITH_ID_GREATER_THEN_pred_userID(regular_user_name VARCHAR(40), pred_userID BIGINT UNSIGNED, number BIGINT UNSIGNED)
+BEGIN
+	START TRANSACTION;
+		SELECT my_chat.users.user_id FROM my_chat.users
+			WHERE my_chat.users.user_id > pred_userID AND (my_chat.users.name REGEXP regular_user_name) OR (my_chat.users.log REGEXP regular_user_name)
+            ORDER BY my_chat.users.user_id ASC
+            LIMIT number
+        ;
+	COMMIT;
+END//
+
+DROP PROCEDURE IF EXISTS FIND_CHAT//
+CREATE PROCEDURE FIND_CHAT(userID BIGINT UNSIGNED, regular_chat_name VARCHAR(255), offset_ BIGINT UNSIGNED, number BIGINT UNSIGNED)
+BEGIN
+	START TRANSACTION;
+		SELECT my_chat.chat_members.chat_id FROM my_chat.chat_members
+			WHERE ((SELECT my_chat.chats.chat_name FROM my_chat.chats WHERE my_chat.chats.id = my_chat.chat_members.chat_id) REGEXP regular_chat_name)
+            LIMIT offset_, number
+        ;
+	COMMIT;
+END//
+
+-- вернет id чатов, в которых есть сообщения за некоторый промежуток времени
+DROP PROCEDURE IF EXISTS FIND_CHAT_BY_TIME_RANGE//
+CREATE PROCEDURE FIND_CHAT_BY_TIME_RANGE(userID BIGINT UNSIGNED, UNIX_TIMESTAMP_left_end BIGINT UNSIGNED, UNIX_TIMESTAMP_right_end BIGINT UNSIGNED, offset_ BIGINT UNSIGNED, number BIGINT UNSIGNED)
+BEGIN
+	SET @left = LEAST(UNIX_TIMESTAMP_left_end, UNIX_TIMESTAMP_right_end);
+	SET @right = GREATEST(UNIX_TIMESTAMP_left_end, UNIX_TIMESTAMP_right_end);
+	START TRANSACTION;
+    -- UNIX_TIMESTAMP
+		SELECT my_chat.chat_members.chat_id FROM my_chat.chat_members
+			WHERE (
+				SELECT COUNT(*) FROM my_chat.chat_messages
+                WHERE (
+					SELECT COUNT(my_chat.messages.id) FROM my_chat.messages
+                    WHERE UNIX_TIMESTAMP(my_chat.messages.last_tick) BETWEEN @left AND @right
+                ) LIMIT 1
+            ) > 0
+            LIMIT offset_, number
+        ;
+	COMMIT;
+END//
+
 DELIMITER ;
 -- --------------------------------------------------------------------------------------
