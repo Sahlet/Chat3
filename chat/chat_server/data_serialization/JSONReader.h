@@ -8,24 +8,40 @@ struct JSONReader : public std::enable_shared_from_this< JSONReader > {
 	virtual bool parse(const std::string& data);
 	virtual void on_finish();
 	virtual bool on_json(const json11::Json& json) = 0;
+	virtual operator json11::Json() const;
 };
 
 
-#define CLASS_MEMBER(x,y) x y;
+#define JSON_CLASS_MEMBER(x,y,z) x y;
 #define JSON(x,y,z) {	auto &e = json[z];   if(!e.is_null()) {convert(y, e);}	}
-#define JSON_DEFAULT_INIT(x,y,z) , y()
+#define JSON_DEFAULT_INIT(x,y,z) y(),
+#define JSON_CONSTRUCTOR_PARAMS(x,y,z) x y = x(),
+#define JSON_MOVE_INIT(x,y,z) y(std::move(y)),
+#define JSON_PARE(x,y,z) {z, to_json(y)},
+#define JSON_TMP_STR "JSON_TMP_STRwoxwoudnsindsiniwnooo4iu4nn dontuseme!!!"
 
 #define JSON_class_gen(CLASS_NAME, CLASS_FIELDS_LIST, ...)									\
 struct CLASS_NAME : public JSONReader	{													\
+	using ptr = std::shared_ptr< CLASS_NAME >;												\
 	virtual bool on_json(const json11::Json& json) override {								\
 		CLASS_FIELDS_LIST(JSON)																\
 		return true;																		\
 	}																						\
-public:																						\
+	virtual operator json11::Json() const override {										\
+		json11::Json::object res {															\
+			CLASS_FIELDS_LIST(JSON_PARE)													\
+			{JSON_TMP_STR, 0}																\
+		};																					\
+		res.erase(res.find(JSON_TMP_STR));													\
+		return json11::Json(std::move(res));												\
+	}																						\
+	std::string dump() { return json11::Json(*this).dump(); }								\
+	CLASS_FIELDS_LIST(JSON_CLASS_MEMBER)													\
+	/*CLASS_NAME() : CLASS_FIELDS_LIST(JSON_DEFAULT_INIT) JSONReader() {}*/					\
+	CLASS_NAME(CLASS_FIELDS_LIST(JSON_CONSTRUCTOR_PARAMS) void* empty_ptr = nullptr) :		\
+		CLASS_FIELDS_LIST(JSON_MOVE_INIT) JSONReader() {}									\
+	CLASS_NAME(CLASS_NAME&&) = default;														\
 	__VA_ARGS__;																			\
-	using ptr = std::shared_ptr< CLASS_NAME >;												\
-	CLASS_FIELDS_LIST(CLASS_MEMBER)															\
-	CLASS_NAME() : JSONReader() CLASS_FIELDS_LIST(JSON_DEFAULT_INIT){}						\
 };
 
 template< typename ITEM_TYPE >
@@ -35,9 +51,18 @@ struct JSONList : public JSONReader {
 		JSON(_, items, list_name);
 		return true;
 	}
+	virtual operator json11::Json() const override {
+		json11::Json::array jsons;
+		jsons.reserve(jsons.size());
+		for (const auto& item : items) { jsons.push_back(json11::Json(item)); }
+		return json11::Json(json11::Json::object{
+			{list_name, jsons }
+		});
+	}
 	using ptr = std::shared_ptr< JSONList >;
 	std::vector< ITEM_TYPE > items;
-	JSONList(std::string list_name = "") : list_name(std::move(list_name)) {}
+	JSONList(std::string list_name = "JSONList") : list_name(std::move(list_name)) {}
+	JSONList(JSONList&&) = default;
 };
 
 #define JSONList_gen(ITEM_TYPE, CLASS_NAME_STR)												\
@@ -48,9 +73,18 @@ struct JSONList< ITEM_TYPE > : public JSONReader {											\
 		JSON(_, items, list_name);															\
 		return true;																		\
 	}																						\
+	virtual operator json11::Json() const override {										\
+		json11::Json::array jsons;															\
+		jsons.reserve(jsons.size());														\
+		for (const auto& item : items) { jsons.push_back(json11::Json(item)); }				\
+		return json11::Json(json11::Json::object{											\
+			{ list_name, jsons }															\
+		});																					\
+	}																						\
 	using ptr = std::shared_ptr< JSONList >;												\
 	std::vector< ITEM_TYPE > items;															\
 	JSONList(std::string list_name = CLASS_NAME_STR) : list_name(std::move(list_name)) {}	\
+	JSONList(JSONList&&) = default;															\
 };
 
 
@@ -137,6 +171,16 @@ struct EnumSerializer {};
 template<class T, typename = std::enable_if<std::is_enum<T>::value>>
 std::string to_string(const T &obj) {
 	return EnumSerializer<T>::to_string(obj);
+}
+
+template < class T >
+std::enable_if_t< !std::is_enum<T>::value, json11::Json > to_json(const T& obj) {
+	return json11::Json(obj);
+}
+
+template<class T >
+std::enable_if_t< std::is_enum<T>::value, json11::Json > to_json(const T &obj) {
+	return json11::Json(to_string(obj));
 }
 
 #endif

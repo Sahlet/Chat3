@@ -23,11 +23,17 @@ EnumSerializer_declaration(CHAT_ACCESS);
 		DEFINITION_NAME(std::string, cause, "cause")
 JSON_class_gen(responseJSON, responseJSON_LIST);
 //------------------------------------------------------------------------------
-#define user_infoJSON_LIST(DEFINITION_NAME)\
+#define min_user_infoJSON_LIST(DEFINITION_NAME)\
 		DEFINITION_NAME(int64_t, user_id, "user_id")\
-		DEFINITION_NAME(std::string, user_name, "user_name")\
-		DEFINITION_NAME(std::string, status, "user_status")\
 		DEFINITION_NAME(int64_t, unix_time_last_tick, "unix_time_last_tick")\
+		DEFINITION_NAME(std::string, user_login, "user_login")\
+		DEFINITION_NAME(std::string, user_name, "user_name")
+JSON_class_gen(min_user_infoJSON, min_user_infoJSON_LIST);
+JSONList_gen(min_user_infoJSON, "users");
+//------------------------------------------------------------------------------
+#define user_infoJSON_LIST(DEFINITION_NAME)\
+		DEFINITION_NAME(min_user_infoJSON, info, "info")\
+		DEFINITION_NAME(std::string, status, "user_status")\
 		DEFINITION_NAME(std::string, avatar, "avatar")
 JSON_class_gen(user_infoJSON, user_infoJSON_LIST);
 //------------------------------------------------------------------------------
@@ -47,43 +53,36 @@ JSON_class_gen(AuthResponse, AuthResponse_LIST);
 		DEFINITION_NAME(int64_t, chat_id, "chat_id")\
 		DEFINITION_NAME(std::string, chat_name, "chat_name")\
 		DEFINITION_NAME(std::string, chat_avatar, "chat_avatar")\
-		DEFINITION_NAME(CHAT_ACCESS, my_chat_access, "my_chat_access")
+		DEFINITION_NAME(CHAT_ACCESS, my_chat_access, "my_chat_access")\
+		DEFINITION_NAME(int64_t, n_unread_messages, "n_unread_messages")
 JSON_class_gen(chatJSON, chatJSON_LIST);
 JSONList_gen(chatJSON, "chats");
 //------------------------------------------------------------------------------
-#define chat_memberJSON_LIST(DEFINITION_NAME)\
-		DEFINITION_NAME(int64_t, chat_id, "chat_id")\
-		DEFINITION_NAME(int64_t, user_id, "user_id")\
-		DEFINITION_NAME(std::string, user_name, "user_name")
-JSON_class_gen(chat_memberJSON, chat_memberJSON_LIST);
-JSONList_gen(chat_memberJSON, "chat_members");
+typedef min_user_infoJSON chat_memberJSON;
 //------------------------------------------------------------------------------
 #define chat_member_for_adminJSON_LIST(DEFINITION_NAME)\
 		DEFINITION_NAME(chat_memberJSON, chat_member, "chat_member")\
-		DEFINITION_NAME(CHAT_ACCESS, access, "access")
+		DEFINITION_NAME(CHAT_ACCESS, chat_access, "chat_access")
 JSON_class_gen(chat_member_for_adminJSON, chat_member_for_adminJSON_LIST);
 JSONList_gen(chat_member_for_adminJSON, "chat_members");
 //------------------------------------------------------------------------------
 #define messageJSON_LIST(DEFINITION_NAME)\
-		DEFINITION_NAME(int64_t, chat_id, "chat_id")\
-		DEFINITION_NAME(int64_t, user_id, "user_id")\
 		DEFINITION_NAME(int64_t, message_id, "message_id")\
+		DEFINITION_NAME(bool, unread, "unread")\
+		DEFINITION_NAME(int64_t, user_id, "user_id")\
 		DEFINITION_NAME(std::string, message, "message")\
-		DEFINITION_NAME(std::string, last_tick, "last_tick")\
-		DEFINITION_NAME(bool, unread, "unread")
+		DEFINITION_NAME(int64_t, unix_time_last_tick, "unix_time_last_tick")
 JSON_class_gen(messageJSON, messageJSON_LIST);
 JSONList_gen(messageJSON, "messages");
 //------------------------------------------------------------------------------
 #define friendJSON_LIST(DEFINITION_NAME)\
-		DEFINITION_NAME(int64_t, chat_id, "chat_id")\
-		DEFINITION_NAME(int64_t, user_id, "user_id")\
-		DEFINITION_NAME(std::string, user_name, "user_name")
+		DEFINITION_NAME(min_user_infoJSON, info, "info")\
+		DEFINITION_NAME(int64_t, chat_id, "chat_id")
 JSON_class_gen(friendJSON, friendJSON_LIST);
 JSONList_gen(friendJSON, "friends");
 //------------------------------------------------------------------------------
 #define request_to_friendJSON_LIST(DEFINITION_NAME)\
-		DEFINITION_NAME(int64_t, user_id, "user_id")\
-		DEFINITION_NAME(std::string, user_name, "user_name")\
+		DEFINITION_NAME(min_user_infoJSON, info, "info")\
 		DEFINITION_NAME(std::string, request_message, "request_message")
 JSON_class_gen(request_to_friendJSON, request_to_friendJSON_LIST);
 JSONList_gen(request_to_friendJSON, "requests_to_friend");
@@ -117,6 +116,13 @@ JSON_class_gen(get_user_infoRequest, get_user_infoRequest_LIST);
 		DEFINITION_NAME(int64_t, user_id, "user_id")
 JSON_class_gen(get_user_last_tickRequest, get_user_last_tickRequest_LIST);
 //------------------------------------------------------------------------------
+//взять членов чата
+#define get_chat_recordsRequest_LIST(DEFINITION_NAME)\
+		DEFINITION_NAME(int64_t, chat_id, "chat_id")\
+		DEFINITION_NAME(int, offset, "offset")\
+		DEFINITION_NAME(int, count, "count")
+JSON_class_gen(get_chat_recordsRequest, get_chat_recordsRequest_LIST);
+//------------------------------------------------------------------------------
 //взять друзей пользователя (в ответе нет chat_id)
 #define get_user_friendsRequest_LIST(DEFINITION_NAME)\
 		DEFINITION_NAME(int64_t, user_id, "user_id")\
@@ -124,17 +130,26 @@ JSON_class_gen(get_user_last_tickRequest, get_user_last_tickRequest_LIST);
 		DEFINITION_NAME(int, count, "count")
 JSON_class_gen(get_user_friendsRequest, get_user_friendsRequest_LIST);
 //------------------------------------------------------------------------------
-//взять моих друзей (в ответе ко всему прочему прийдут chat_id чатов с друзьями)
-#define get_my_friendsRequest_LIST(DEFINITION_NAME)\
+//найти друзей пользователя (в ответе нет chat_id)
+#define find_user_friendsRequest_LIST(DEFINITION_NAME)\
+		DEFINITION_NAME(int64_t, user_id, "user_id")\
+		DEFINITION_NAME(std::string, regular_str, "regular_str")\
 		DEFINITION_NAME(int, offset, "offset")\
 		DEFINITION_NAME(int, count, "count")
-JSON_class_gen(get_my_friendsRequest, get_my_friendsRequest_LIST);
+JSON_class_gen(find_user_friendsRequest, find_user_friendsRequest_LIST);
 //------------------------------------------------------------------------------
-//взять мои чаты
-#define get_my_chatsRequest_LIST(DEFINITION_NAME)\
+//взять список каких-то моих записей
+#define get_my_recordsRequest_LIST(DEFINITION_NAME)\
 		DEFINITION_NAME(int, offset, "offset")\
 		DEFINITION_NAME(int, count, "count")
-JSON_class_gen(get_my_chatsRequest, get_my_chatsRequest_LIST);
+JSON_class_gen(get_my_recordsRequest, get_my_recordsRequest_LIST);
+//------------------------------------------------------------------------------
+//найти список каких-то моих записей
+#define find_my_recordsRequest_LIST(DEFINITION_NAME)\
+		DEFINITION_NAME(std::string, regular_str, "regular_str")\
+		DEFINITION_NAME(int, offset, "offset")\
+		DEFINITION_NAME(int, count, "count")
+JSON_class_gen(find_my_recordsRequest, find_my_recordsRequest_LIST);
 //------------------------------------------------------------------------------
 //отослать сообщение в чат
 #define send_messageRequest_LIST(DEFINITION_NAME)\
@@ -158,6 +173,16 @@ JSON_class_gen(accept_request_for_friendRequest, accept_request_for_friendReques
 		DEFINITION_NAME(std::string, chat_name, "chat_name")\
 		DEFINITION_NAME(std::string, chat_avatar, "chat_avatar")
 JSON_class_gen(create_chateRequest, create_chatRequest_LIST);
+//------------------------------------------------------------------------------
+//добавить пользователя в чат
+#define add_chat_memberRequest_LIST(DEFINITION_NAME)\
+		DEFINITION_NAME(int64_t, chat_id, "chat_id")\
+		DEFINITION_NAME(int64_t, user_id, "user_id")\
+		DEFINITION_NAME(CHAT_ACCESS, chat_access, "chat_access")
+JSON_class_gen(add_chat_memberRequest, add_chat_memberRequest_LIST);
+//------------------------------------------------------------------------------
+//задать доступ члену чат
+typedef add_chat_memberRequest set_chat_member_accessRequest;
 //------------------------------------------------------------------------------
 
 #pragma endregion

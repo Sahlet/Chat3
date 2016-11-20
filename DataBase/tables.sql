@@ -97,7 +97,8 @@ CREATE TABLE IF NOT EXISTS my_chat.chat_messages(
     user_id BIGINT UNSIGNED NOT NULL,
     message_id BIGINT UNSIGNED NOT NULL,
     unread BOOL NOT NULL DEFAULT TRUE,
-	/*UNIQUE*/ INDEX(chat_id, user_id/*, message_id*/),
+	-- /*UNIQUE*/ INDEX(chat_id, user_id/*, message_id*/),
+    PRIMARY KEY (chat_id, user_id, message_id),
     FOREIGN KEY(chat_id) REFERENCES my_chat.chats (id),
     FOREIGN KEY(user_id) REFERENCES my_chat.users (id),
     FOREIGN KEY(message_id) REFERENCES my_chat.messages (id)

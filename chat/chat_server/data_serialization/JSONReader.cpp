@@ -15,6 +15,7 @@ bool JSONReader::parse(const std::string& data) {
 	on_finish();
 	return true;
 }
+JSONReader::operator json11::Json() const { return json11::Json(); }
 
 //----------------------------------------------------------
 void convert(int & obj, const json11::Json& value) {

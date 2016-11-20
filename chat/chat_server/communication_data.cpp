@@ -11,18 +11,18 @@ std::string EnumSerializer< QUERY_RESPONSE_STATUS >::to_string(const QUERY_RESPO
 }
 
 CHAT_ACCESS EnumSerializer< CHAT_ACCESS >::from_string(const std::string& str) {
-	if (str == "USER") return CHAT_ACCESS::USER;
-	else if (str == "PRIVILEGED_USER") return CHAT_ACCESS::PRIVILEGED_USER;
-	else if (str == "ADMIN") return CHAT_ACCESS::ADMIN;
+	if (str == "'u'") return CHAT_ACCESS::USER;
+	else if (str == "'p'") return CHAT_ACCESS::PRIVILEGED_USER;
+	else if (str == "'a'") return CHAT_ACCESS::ADMIN;
 
 	return CHAT_ACCESS(0);
 }
 std::string EnumSerializer< CHAT_ACCESS >::to_string(const CHAT_ACCESS& enm) {
-	if (enm == CHAT_ACCESS::USER) return "USER";
-	else if (enm == CHAT_ACCESS::PRIVILEGED_USER) return "PRIVILEGED_USER";
-	else if (enm == CHAT_ACCESS::ADMIN) return "ADMIN";
+	if (enm == CHAT_ACCESS::USER) return "'u'";
+	else if (enm == CHAT_ACCESS::PRIVILEGED_USER) return "'p'";
+	else if (enm == CHAT_ACCESS::ADMIN) return "'a'";
 	
-	return "NO_ACCESS";
+	return "NULL";
 }
 
 command EnumSerializer< command >::from_string(const std::string& str) {

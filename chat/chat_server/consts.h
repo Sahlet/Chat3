@@ -23,11 +23,16 @@ enum class command : int {
 	get_last_user_tick,
 	//---------------------
 	get_chat_members,
-	get_requests_for_friendship,
+	get_requests_for_friendship_to_me,
+	get_requests_for_friendship_from_me,
 	get_messages,
-	get_friens,
-	get_chats,
-	get_users
+	get_my_friends,
+	get_user_friends,
+	get_my_chats,
+	find_my_friends,
+	find_my_chats,
+	find_users,
+	find_user_friends
 };
 
 enum class QUERY_RESPONSE_STATUS : int { ERR, OK };

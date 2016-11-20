@@ -16,7 +16,6 @@ http://www.mysql.ru/docs/man/mysql_real_escape_string.html
 */
 #include "query_processing.h"
 #include <My\WinSockBaseSerialization.h>
-#include "consts.h"
 #include "communication_data.h"
 
 using namespace My;
@@ -24,6 +23,25 @@ using namespace std;
 
 user::user() {}
 user::~user() {}
+
+//------------------------------------------------------------------------------
+struct maker {
+	static std::string random_str_make(unsigned short key) {
+		std::string rand_str(10, '_');
+		for (auto& ch : rand_str) { ch = '0' + rand() % 10; }
+		return std::to_string(key) + "_" + rand_str;
+	}
+
+	static std::string make_std_string(const char* ch, size_t size) {
+		std::string res;
+		if (!size) return res;
+		res.resize(size);
+		char* buf = const_cast< char* >(res.c_str());
+		for (auto end = ch + size; ch < end; ch++, buf++) *buf = *ch;
+		return res;
+	}
+};
+//------------------------------------------------------------------------------
 
 char* strmov(char* to, const char* from) {
 	while ((*to = *from) != '\0') { to++; from++; }
@@ -62,6 +80,321 @@ void test(std::string login, std::string password) {
 	}
 }
 
+template< typename T >
+bool get_list(mysqlWrap& connection, command cmd, const int64_t& user_id, const T& params, std::string& Response) { return false; }
+
+template<>
+bool get_list< get_chat_recordsRequest >(mysqlWrap& connection, command cmd, const int64_t& user_id, const get_chat_recordsRequest& params, std::string& Response) {
+	char query[120], *end;
+
+	if (cmd != command::get_chat_members && cmd != command::get_messages) return false;
+
+	end = strmov(query, cmd == command::get_chat_members ? "CALL my_chat.GET_CHAT_MEMBERS(" : "CALL my_chat.GET_MESSAGES(");	
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(user_id));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(params.chat_id));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(params.offset));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(params.count));
+	end += strlen(end);
+	*end++ = ')';
+
+	if (mysql_real_query(connection.get(), query, (unsigned int)(end - query))) throw connection.get_mysqlException(__FUNCTION__);
+
+	auto query_res = connection.store_result();
+	connection.clean_query();
+
+	if (!query_res) return false;
+
+	auto rows_number = mysql_num_rows(query_res.get());
+	MYSQL_ROW row;
+	unsigned long* length;
+
+	if (cmd == command::get_chat_members) {
+		JSONList< chat_memberJSON > res;
+		res.items.reserve(rows_number);
+		while ((row = mysql_fetch_row(query_res.get())) && (length = mysql_fetch_lengths(query_res.get()))) {
+			chat_memberJSON chat_member;
+			chat_member.user_id = atoll(row[0]);
+			chat_member.unix_time_last_tick = atoll(row[1]);
+			chat_member.user_login = maker::make_std_string(row[2], length[2]);
+			chat_member.user_name = maker::make_std_string(row[3], length[3]);
+
+			res.items.push_back(std::move(chat_member));
+		}
+		Response = json11::Json(res).dump();
+	} else if (cmd == command::get_messages) {
+		JSONList< messageJSON > res;
+		res.items.reserve(rows_number);
+		while ((row = mysql_fetch_row(query_res.get())) && (length = mysql_fetch_lengths(query_res.get()))) {
+			messageJSON message;
+			message.message_id = atoll(row[0]);
+			message.unread = bool(atoi(row[1]));
+			message.user_id = atoll(row[2]);
+			message.message = maker::make_std_string(row[3], length[3]);
+			message.unix_time_last_tick = atoll(row[4]);
+
+			res.items.push_back(std::move(message));
+		}
+		Response = json11::Json(res).dump();
+	}
+
+	return true;
+}
+template<>
+bool get_list< get_my_recordsRequest >(mysqlWrap& connection, command cmd, const int64_t& user_id, const get_my_recordsRequest& params, std::string& Response) {
+	char query[120], *end;
+
+	if (cmd != command::get_requests_for_friendship_from_me && cmd != command::get_requests_for_friendship_to_me && cmd != command::get_my_friends && cmd != command::get_my_chats) return false;
+
+	end = strmov(query, cmd == command::get_requests_for_friendship_to_me ? "CALL my_chat.GET_REQUESTS_TO_ME(" : cmd == command::get_requests_for_friendship_from_me ? "CALL my_chat.GET_REQUESTS_FROM_ME(" : cmd == command::get_my_friends ? "CALL my_chat.GET_MY_FRIENDS(" : "CALL my_chat.GET_CHATS(");
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(user_id));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(params.offset));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(params.count));
+	end += strlen(end);
+	*end++ = ')';
+
+	if (mysql_real_query(connection.get(), query, (unsigned int)(end - query))) throw connection.get_mysqlException(__FUNCTION__);
+
+	auto query_res = connection.store_result();
+	connection.clean_query();
+
+	if (!query_res) return false;
+
+	auto rows_number = mysql_num_rows(query_res.get());
+	MYSQL_ROW row;
+	unsigned long* length;
+
+	if (cmd == command::get_requests_for_friendship_to_me || cmd == command::get_requests_for_friendship_from_me) {
+		JSONList< request_to_friendJSON > res;
+		res.items.reserve(rows_number);
+		while ((row = mysql_fetch_row(query_res.get())) && (length = mysql_fetch_lengths(query_res.get()))) {
+			request_to_friendJSON request_to_friend;
+			request_to_friend.info.user_id = atoll(row[0]);
+			request_to_friend.info.unix_time_last_tick = atoll(row[1]);
+			request_to_friend.info.user_login = maker::make_std_string(row[2], length[2]);
+			request_to_friend.info.user_name = maker::make_std_string(row[3], length[3]);
+			request_to_friend.request_message = maker::make_std_string(row[4], length[4]);
+
+			res.items.push_back(std::move(request_to_friend));
+		}
+		Response = json11::Json(res).dump();
+	}
+	else if (cmd == command::get_my_friends) {
+		JSONList< friendJSON > res;
+		res.items.reserve(rows_number);
+		while ((row = mysql_fetch_row(query_res.get())) && (length = mysql_fetch_lengths(query_res.get()))) {
+			friendJSON _friend;
+			_friend.info.user_id = atoll(row[0]);
+			_friend.info.unix_time_last_tick = atoll(row[1]);
+			_friend.info.user_login = maker::make_std_string(row[2], length[2]);
+			_friend.info.user_name = maker::make_std_string(row[3], length[3]);
+			_friend.chat_id = atoll(row[4]);
+
+			res.items.push_back(std::move(_friend));
+		}
+		Response = json11::Json(res).dump();
+	} else if (cmd == command::get_my_chats) {
+		JSONList< chatJSON > res;
+		res.items.reserve(rows_number);
+		while ((row = mysql_fetch_row(query_res.get())) && (length = mysql_fetch_lengths(query_res.get()))) {
+			chatJSON chat;
+			chat.chat_id = atoll(row[0]);
+			chat.chat_name = maker::make_std_string(row[1], length[1]);
+			chat.chat_avatar = maker::make_std_string(row[2], length[2]);
+			chat.my_chat_access = EnumSerializer<CHAT_ACCESS>::from_string(maker::make_std_string(row[3], length[3]));
+			chat.n_unread_messages = atoll(row[4]);
+
+			res.items.push_back(std::move(chat));
+		}
+		Response = json11::Json(res).dump();
+	}
+
+	return true;
+}
+template<>
+bool get_list< get_user_friendsRequest >(mysqlWrap& connection, command cmd, const int64_t& user_id, const get_user_friendsRequest& params, std::string& Response) {
+	char query[120], *end;
+
+	if (cmd != command::get_user_friends) return false;
+
+	end = strmov(query, "CALL my_chat.GET_USER_FRIENDS(");
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(params.user_id));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(params.offset));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(params.count));
+	end += strlen(end);
+	*end++ = ')';
+
+	if (mysql_real_query(connection.get(), query, (unsigned int)(end - query))) throw connection.get_mysqlException(__FUNCTION__);
+
+	auto query_res = connection.store_result();
+	connection.clean_query();
+
+	if (!query_res) return false;
+
+	auto rows_number = mysql_num_rows(query_res.get());
+	MYSQL_ROW row;
+	unsigned long* length;
+
+	
+	JSONList< min_user_infoJSON > res;
+	res.items.reserve(rows_number);
+	while ((row = mysql_fetch_row(query_res.get())) && (length = mysql_fetch_lengths(query_res.get()))) {
+		min_user_infoJSON min_user_info;
+		min_user_info.user_id = atoll(row[0]);
+		min_user_info.unix_time_last_tick = atoll(row[1]);
+		min_user_info.user_login = maker::make_std_string(row[2], length[2]);
+		min_user_info.user_name = maker::make_std_string(row[3], length[3]);
+
+		res.items.push_back(std::move(min_user_info));
+	}
+	Response = json11::Json(res).dump();
+
+	return true;
+}
+template<>
+bool get_list< find_my_recordsRequest >(mysqlWrap& connection, command cmd, const int64_t& user_id, const find_my_recordsRequest& params, std::string& Response) {
+	std::string query;
+	query.resize(params.regular_str.size() * 2 + 1 + 100);
+	char *end;
+
+	if (cmd != command::find_my_friends && cmd != command::find_my_chats && cmd != command::find_users) return false;
+
+	end = strmov(const_cast< char* >(query.c_str()), cmd == command::find_my_friends ? "CALL my_chat.FIND_MY_FRIENDS(" : cmd == command::find_my_chats ? "CALL my_chat.FIND_CHAT(" : "CALL my_chat.FIND_USER(");
+	if (cmd != command::find_users) {
+		sprintf_s(end, query.size() - (end - query.c_str()), "%d", int(user_id));
+		end += strlen(end);
+		*end++ = ',';
+	}
+	*end++ = '\'';
+	end += mysql_real_escape_string(connection.get(), end, params.regular_str.c_str(), params.regular_str.size());
+	*end++ = '\'';
+	*end++ = ',';
+	sprintf_s(end, query.size() - (end - query.c_str()), "%d", int(params.offset));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, query.size() - (end - query.c_str()), "%d", int(params.count));
+	end += strlen(end);
+	*end++ = ')';
+
+	if (mysql_real_query(connection.get(), query.c_str(), (unsigned int)(end - query.c_str()))) throw connection.get_mysqlException(__FUNCTION__);
+
+	auto query_res = connection.store_result();
+	connection.clean_query();
+
+	if (!query_res) return false;
+
+	auto rows_number = mysql_num_rows(query_res.get());
+	MYSQL_ROW row;
+	unsigned long* length;
+
+	if (cmd == command::find_my_friends) {
+		JSONList< friendJSON > res;
+		res.items.reserve(rows_number);
+		while ((row = mysql_fetch_row(query_res.get())) && (length = mysql_fetch_lengths(query_res.get()))) {
+			friendJSON _friend;
+			_friend.info.user_id = atoll(row[0]);
+			_friend.info.unix_time_last_tick = atoll(row[1]);
+			_friend.info.user_login = maker::make_std_string(row[2], length[2]);
+			_friend.info.user_name = maker::make_std_string(row[3], length[3]);
+			_friend.chat_id = atoll(row[4]);
+
+			res.items.push_back(std::move(_friend));
+		}
+		Response = json11::Json(res).dump();
+	} else if (cmd == command::find_my_chats) {
+		JSONList< chatJSON > res;
+		res.items.reserve(rows_number);
+		while ((row = mysql_fetch_row(query_res.get())) && (length = mysql_fetch_lengths(query_res.get()))) {
+			chatJSON chat;
+			chat.chat_id = atoll(row[0]);
+			chat.chat_name = maker::make_std_string(row[1], length[1]);
+			chat.chat_avatar = maker::make_std_string(row[2], length[2]);
+			chat.my_chat_access = EnumSerializer<CHAT_ACCESS>::from_string(maker::make_std_string(row[3], length[3]));
+			chat.n_unread_messages = atoll(row[4]);
+
+			res.items.push_back(std::move(chat));
+		}
+		Response = json11::Json(res).dump();
+	} else if (cmd == command::find_users) {
+		JSONList< min_user_infoJSON > res;
+		res.items.reserve(rows_number);
+		while ((row = mysql_fetch_row(query_res.get())) && (length = mysql_fetch_lengths(query_res.get()))) {
+			min_user_infoJSON min_user_info;
+			min_user_info.user_id = atoll(row[0]);
+			min_user_info.unix_time_last_tick = atoll(row[1]);
+			min_user_info.user_login = maker::make_std_string(row[2], length[2]);
+			min_user_info.user_name = maker::make_std_string(row[3], length[3]);
+
+			res.items.push_back(std::move(min_user_info));
+		}
+		Response = json11::Json(res).dump();
+	}
+
+	return true;
+}
+template<>
+bool get_list< find_user_friendsRequest >(mysqlWrap& connection, command cmd, const int64_t& user_id, const find_user_friendsRequest& params, std::string& Response) {
+	std::string query;
+	query.resize(params.regular_str.size() * 2 + 1 + 100);
+	char *end;
+
+	if (cmd != command::find_user_friends) return false;
+
+	end = strmov(const_cast< char* >(query.c_str()), "CALL my_chat.FIND_USER_FRIENDS(");
+	sprintf_s(end, query.size() - (end - query.c_str()), "%d", int(params.user_id));
+	end += strlen(end);
+	*end++ = ',';
+	*end++ = '\'';
+	end += mysql_real_escape_string(connection.get(), end, params.regular_str.c_str(), params.regular_str.size());
+	*end++ = '\'';
+	*end++ = ',';
+	sprintf_s(end, query.size() - (end - query.c_str()), "%d", int(params.offset));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, query.size() - (end - query.c_str()), "%d", int(params.count));
+	end += strlen(end);
+	*end++ = ')';
+
+	if (mysql_real_query(connection.get(), query.c_str(), (unsigned int)(end - query.c_str()))) throw connection.get_mysqlException(__FUNCTION__);
+
+	auto query_res = connection.store_result();
+	connection.clean_query();
+
+	if (!query_res) return false;
+
+	auto rows_number = mysql_num_rows(query_res.get());
+	MYSQL_ROW row;
+	unsigned long* length;
+
+	JSONList< min_user_infoJSON > res;
+	res.items.reserve(rows_number);
+	while ((row = mysql_fetch_row(query_res.get())) && (length = mysql_fetch_lengths(query_res.get()))) {
+		min_user_infoJSON min_user_info;
+		min_user_info.user_id = atoll(row[0]);
+		min_user_info.unix_time_last_tick = atoll(row[1]);
+		min_user_info.user_login = maker::make_std_string(row[2], length[2]);
+		min_user_info.user_name = maker::make_std_string(row[3], length[3]);
+
+		res.items.push_back(std::move(min_user_info));
+	}
+	Response = json11::Json(res).dump();
+
+	return true;
+}
+
 void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception) {
 	std::string request_str;
 	sock >> request_str;
@@ -81,20 +414,20 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 				(!reg_request.password.size() || reg_request.password.size() > max_password_len)
 				)
 			{
-				std::string resp;
-				if (!reg_request.login.size()) resp += "too few login symbols in login";
-				else if (reg_request.login.size() > max_login_len) resp += "too many symbols in login";
+				std::string cause;
+				if (!reg_request.login.size()) cause += "too few login symbols in login";
+				else if (reg_request.login.size() > max_login_len) cause += "too many symbols in login";
 
-				if (!reg_request.password.size()) resp += "\ntoo few symbols in password";
-				else if (reg_request.password.size() > max_password_len) resp += "too many symbols in password";
+				if (!reg_request.password.size()) cause += "\ntoo few symbols in password";
+				else if (reg_request.password.size() > max_password_len) cause += "too many symbols in password";
 
-				json11::Json json = json11::Json::object({
-					{ "request_key", request_key },
-					{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
-					{ "response", std::move(resp) }
-				});
+				sock <<
+					responseJSON(
+						request_key,
+						QUERY_RESPONSE_STATUS::ERR,
+						std::move(cause)
+					).dump();
 
-				sock << json.dump();
 				return false;
 			}
 
@@ -103,13 +436,12 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 		static bool online_check(My::Socket& sock, const user_connection_identifier& identifier, int request_key) {
 			if (identifier.user_id >= max_user_count) return false;
 			if (!users()[identifier.user_id].is_online(identifier.connection_identifier)) {
-				sock
-				<<
-				json11::Json(json11::Json::object {
-					{ "request_key", request_key },
-					{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
-					{ "response", "user with id \"" + std::to_string(identifier.user_id) + "\" and key \"" + identifier.connection_identifier + "\" is not online" }
-				}).dump();
+				sock <<
+					responseJSON(
+						request_key,
+						QUERY_RESPONSE_STATUS::ERR,
+						"user with id \"" + std::to_string(identifier.user_id) + "\" and key \"" + identifier.connection_identifier + "\" is not online"
+					).dump();				
 
 				return false;
 			}
@@ -128,23 +460,22 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 		if (!local_funcs::correct_reg_and_auth_params(sock, reg_request, request.request_key)) return;
 
 		if (!user::regUser(connection, reg_request.login, reg_request.password)) {
-			json11::Json json = json11::Json::object {
-				{ "request_key", request.request_key },
-				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
-				{ "cause", "user with this loigin already exists" }
-			};
-
-			sock << json.dump();
+			sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::ERR,
+				"user with this loigin already exists"
+			).dump();
 
 			return;
 		}
 
-		json11::Json json = json11::Json::object {
-			{ "request_key", request.request_key },
-			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) }
-		};
 
-		sock << json.dump();
+		sock <<
+		responseJSON(
+			request.request_key,
+			QUERY_RESPONSE_STATUS::OK
+		).dump();
 
 		return;
 	}
@@ -160,23 +491,22 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 		std::string authResponse;
 
 		if (!user::authUser(connection, reg_request.login, reg_request.password, authResponse)) {
-			json11::Json json = json11::Json::object {
-				{ "request_key", request.request_key },
-				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
-				{ "cause", "user with this loigin and password is not exist" }
-			};
-
-			sock << json.dump();
+			sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::ERR,
+				"user with this loigin and password is not exist"
+			).dump();
 
 			return;
 		}
 
-		json11::Json json = json11::Json::object {
-			{ "request_key", request.request_key },
-			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) }
-		};
-
-		sock << json.dump() << authResponse;
+		sock <<
+		responseJSON(
+			request.request_key,
+			QUERY_RESPONSE_STATUS::OK
+		).dump()
+		<< authResponse;
 
 		return;
 	}
@@ -194,23 +524,21 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 		if (!send_request_to_friend_request.parse(request_str)) return;
 
 		if (!user::send_request_to_friend(connection, identifier.user_id, send_request_to_friend_request.user_id, send_request_to_friend_request.message)) {
-			json11::Json json = json11::Json::object{
-				{ "request_key", request.request_key },
-				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
-				{ "cause", "could not add request to friend" }
-			};
-
-			sock << json.dump();
+			sock <<
+				responseJSON(
+					request.request_key,
+					QUERY_RESPONSE_STATUS::ERR,
+					"could not add request to friend"
+				).dump();
 
 			return;
 		}
 
-		json11::Json json = json11::Json::object {
-			{ "request_key", request.request_key },
-			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) }
-		};
-
-		sock << json.dump();
+		sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::OK
+			).dump();
 
 		return;
 	}
@@ -222,23 +550,21 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 		if (!send_message_request.parse(request_str)) return;
 
 		if (!user::send_message(connection, identifier.user_id, send_message_request.chat_id, send_message_request.message)) {
-			json11::Json json = json11::Json::object{
-				{ "request_key", request.request_key },
-				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
-				{ "cause", "could not send message" }
-			};
-
-			sock << json.dump();
+			sock <<
+				responseJSON(
+					request.request_key,
+					QUERY_RESPONSE_STATUS::ERR,
+					"could not send message"
+				).dump();
 
 			return;
 		}
 
-		json11::Json json = json11::Json::object {
-			{ "request_key", request.request_key },
-			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) }
-		};
-
-		sock << json.dump();
+		sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::OK
+			).dump();
 
 		return;
 	}
@@ -248,83 +574,21 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 		sock >> request_str;
 
 		if (!user::set_user_str_param(connection, command::set_status == cmd ? "STATUS" : "AVATAR", identifier.user_id, request_str)) {
-			json11::Json json = json11::Json::object {
-				{ "request_key", request.request_key },
-				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
-				{ "cause", std::string("could not send ") + (command::set_status == cmd ? "status" : "avatar") }
-			};
-
-			sock << json.dump();
-
-			return;
-		}
-
-		json11::Json json = json11::Json::object {
-			{ "request_key", request.request_key },
-			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) }
-		};
-
-		sock << json.dump();
-
-		return;
-	}
-#pragma endregion
-#pragma region get_user_info
-	if (command::get_user_info == cmd) {
-		sock >> request_str;
-		get_user_infoRequest get_user_info;
-		if (!get_user_info.parse(request_str)) return;
-
-		std::string user_info_Response;
-
-		if (!users()[get_user_info.user_id].get_user_info(connection, user_info_Response)) {
-			json11::Json json = json11::Json::object {
-				{ "request_key", request.request_key },
-				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
-				{ "cause", "could not get user info" }
-			};
-
-			sock << json.dump();
+			sock <<
+				responseJSON(
+					request.request_key,
+					QUERY_RESPONSE_STATUS::ERR,
+					std::string("could not send ") + (command::set_status == cmd ? "status" : "avatar")
+				).dump();
 
 			return;
 		}
 
-		json11::Json json = json11::Json::object {
-			{ "request_key", request.request_key },
-			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) }
-		};
-
-		sock << json.dump() << user_info_Response;
-
-		return;
-	}
-#pragma endregion
-#pragma region get_last_user_tick
-	if (command::get_last_user_tick == cmd) {
-		sock >> request_str;
-		get_user_last_tickRequest get_user_last_tick;
-		if (!get_user_last_tick.parse(request_str)) return;
-
-		std::string user_last_tick_Response;
-
-		if (!users()[get_user_last_tick.user_id].get_user_last_tick(connection, user_last_tick_Response)) {
-			json11::Json json = json11::Json::object{
-				{ "request_key", request.request_key },
-				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
-				{ "cause", "could not get user last_tick" }
-			};
-
-			sock << json.dump();
-
-			return;
-		}
-
-		json11::Json json = json11::Json::object{
-			{ "request_key", request.request_key },
-			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) }
-		};
-
-		sock << json.dump() << user_last_tick_Response;
+		sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::OK
+			).dump();
 
 		return;
 	}
@@ -338,27 +602,26 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 		int64_t friend_chat_id;
 
 		if (!user::accept_request_for_friend(connection, identifier.user_id, accept_request_for_friend.user_id, friend_chat_id)) {
-			json11::Json json = json11::Json::object {
-				{ "request_key", request.request_key },
-				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
-				{ "cause", "could not accept request for friendship" }
-			};
-
-			sock << json.dump();
+			sock <<
+				responseJSON(
+					request.request_key,
+					QUERY_RESPONSE_STATUS::ERR,
+					"could not accept request for friendship"
+				).dump();
 
 			return;
 		}
 
-		sock
+		
+		sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::OK
+			).dump()
 		<<
-		json11::Json(json11::Json::object {
-			{ "request_key", request.request_key },
-			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) }
-		}).dump()
-		<<
-		json11::Json(json11::Json::object{
-			{ "chat_id", friend_chat_id }
-		}).dump();
+			json11::Json(json11::Json::object{
+				{ "chat_id", friend_chat_id }
+			}).dump();
 
 		return;
 	}
@@ -370,36 +633,33 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 		if (!create_chate.parse(request_str)) return;
 
 		if (create_chate.chat_name.size() > 125) {
-			json11::Json json = json11::Json::object{
-				{ "request_key", request.request_key },
-				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
-				{ "cause", "too long chat name" }
-			};
-
-			sock << json.dump();
+			sock <<
+				responseJSON(
+					request.request_key,
+					QUERY_RESPONSE_STATUS::ERR,
+					"too long chat name"
+				).dump();
 
 			return;
 		}
 
 		int64_t chat_id;
 		if (!user::create_chat(connection, identifier.user_id, create_chate.chat_name, create_chate.chat_avatar, chat_id)) {
-			json11::Json json = json11::Json::object{
-				{ "request_key", request.request_key },
-				{ "response_status", to_string(QUERY_RESPONSE_STATUS::ERR) },
-				{ "cause", "could not accept creat chat" }
-			};
-
-			sock << json.dump();
+			sock <<
+				responseJSON(
+					request.request_key,
+					QUERY_RESPONSE_STATUS::ERR,
+					"could not accept creat chat"
+				).dump();
 
 			return;
 		}
 
-		sock
-		<<
-		json11::Json(json11::Json::object{
-			{ "request_key", request.request_key },
-			{ "response_status", to_string(QUERY_RESPONSE_STATUS::OK) }
-		}).dump()
+		sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::OK
+			).dump()
 		<<
 		json11::Json(json11::Json::object{
 			{ "chat_id", chat_id }
@@ -408,26 +668,268 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 		return;
 	}
 #pragma endregion
+#pragma region add_chat_member
+	if (command::add_chat_member == cmd) {
+		sock >> request_str;
+		add_chat_memberRequest add_chat_member;
+		if (!add_chat_member.parse(request_str)) return;
+
+		std::string cause;
+		if (add_chat_member.chat_access == CHAT_ACCESS::NO_ACCESS || !user::add_chat_member(connection, identifier.user_id, add_chat_member.chat_id, add_chat_member.user_id, add_chat_member.chat_access)) {
+			sock <<
+				responseJSON(
+					request.request_key,
+					QUERY_RESPONSE_STATUS::ERR,
+					"could not add chat member"
+				).dump();
+
+			return;
+		}
+
+		sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::OK
+			).dump();
+
+		return;
+	}
+#pragma endregion
+#pragma region set_chat_member_access
+	if (command::set_chat_member_access == cmd) {
+		sock >> request_str;
+		set_chat_member_accessRequest set_chat_member_access;
+		if (!set_chat_member_access.parse(request_str)) return;
+
+		std::string cause;
+		if (!user::set_chat_member_access(connection, identifier.user_id, set_chat_member_access.chat_id, set_chat_member_access.user_id, set_chat_member_access.chat_access)) {
+			sock <<
+				responseJSON(
+					request.request_key,
+					QUERY_RESPONSE_STATUS::ERR,
+					"could not set chat member access"
+				).dump();
+
+			return;
+		}
+
+		sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::OK
+			).dump();
+
+		return;
+	}
+#pragma endregion
+#pragma region get_user_info
+	if (command::get_user_info == cmd) {
+		sock >> request_str;
+		get_user_infoRequest get_user_info;
+		if (!get_user_info.parse(request_str)) return;
+
+		std::string user_info_Response;
+
+		if (!users()[get_user_info.user_id].get_user_info(connection, user_info_Response)) {
+			sock <<
+				responseJSON(
+					request.request_key,
+					QUERY_RESPONSE_STATUS::ERR,
+					"could not get user info"
+				).dump();
+
+			return;
+		}
+
+		sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::OK
+			).dump()
+		<< user_info_Response;
+
+		return;
+	}
+#pragma endregion
+#pragma region get_last_user_tick
+	if (command::get_last_user_tick == cmd) {
+		sock >> request_str;
+		get_user_last_tickRequest get_user_last_tick;
+		if (!get_user_last_tick.parse(request_str)) return;
+
+		std::string user_last_tick_Response;
+
+		if (!users()[get_user_last_tick.user_id].get_user_last_tick(connection, user_last_tick_Response)) {
+			sock <<
+				responseJSON(
+					request.request_key,
+					QUERY_RESPONSE_STATUS::ERR,
+					"could not get user last_tick"
+				).dump();
+
+			return;
+		}
+
+		sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::OK
+			).dump()
+		<< user_last_tick_Response;
+
+		return;
+	}
+#pragma endregion
+
+#pragma region get_chat_members get_messages
+	if (command::get_chat_members == cmd || command::get_messages == cmd) {
+		sock >> request_str;
+		get_chat_recordsRequest get_chat_records;
+		if (!get_chat_records.parse(request_str)) return;
+
+		std::string Response;
+
+		if (!get_list(connection, cmd, identifier.user_id, get_chat_records, Response)) {
+			sock <<
+				responseJSON(
+					request.request_key,
+					QUERY_RESPONSE_STATUS::ERR,
+					"could not get chat records"
+				).dump();
+
+			return;
+		}
+
+		sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::OK
+			).dump()
+		<< Response;
+
+		return;
+	}
+#pragma endregion
+#pragma region get_requests_for_friendship_to_me get_requests_for_friendship_from_me get_my_friends get_my_chats
+	if (command::get_requests_for_friendship_to_me == cmd || command::get_requests_for_friendship_from_me == cmd || command::get_my_friends == cmd || command::get_my_chats == cmd) {
+		sock >> request_str;
+		get_my_recordsRequest get_my_records;
+		if (!get_my_records.parse(request_str)) return;
+
+		std::string Response;
+
+		if (!get_list(connection, cmd, identifier.user_id, get_my_records, Response)) {
+			sock <<
+				responseJSON(
+					request.request_key,
+					QUERY_RESPONSE_STATUS::ERR,
+					"could not get my records"
+				).dump();
+
+			return;
+		}
+
+		sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::OK
+			).dump()
+		<< Response;
+
+		return;
+	}
+#pragma endregion
+#pragma region get_user_friends
+	if (command::get_user_friends == cmd) {
+		sock >> request_str;
+		get_user_friendsRequest get_user_friends;
+		if (!get_user_friends.parse(request_str)) return;
+
+		std::string Response;
+
+		if (!get_list(connection, cmd, identifier.user_id, get_user_friends, Response)) {
+			sock <<
+				responseJSON(
+					request.request_key,
+					QUERY_RESPONSE_STATUS::ERR,
+					"could not get user records"
+				).dump();
+
+			return;
+		}
+
+		sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::OK
+			).dump()
+		<< Response;
+
+		return;
+	}
+#pragma endregion
+#pragma region find_my_friends, find_my_chats, find_users
+	if (command::find_my_friends == cmd || command::find_my_chats == cmd || command::find_users == cmd) {
+		sock >> request_str;
+		find_my_recordsRequest find_my_records;
+		if (!find_my_records.parse(request_str)) return;
+
+		std::string Response;
+
+		if (!get_list(connection, cmd, identifier.user_id, find_my_records, Response)) {
+			sock <<
+				responseJSON(
+					request.request_key,
+					QUERY_RESPONSE_STATUS::ERR,
+					"could not find my records"
+				).dump();
+
+			return;
+		}
+
+		sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::OK
+			).dump()
+		<< Response;
+
+		return;
+	}
+#pragma endregion
+#pragma region find_user_friends
+	if (command::find_user_friends == cmd) {
+		sock >> request_str;
+		find_user_friendsRequest find_user_friends;
+		if (!find_user_friends.parse(request_str)) return;
+
+		std::string Response;
+
+		if (!get_list(connection, cmd, identifier.user_id, find_user_friends, Response)) {
+			sock <<
+				responseJSON(
+					request.request_key,
+					QUERY_RESPONSE_STATUS::ERR,
+					"could not find user friends"
+				).dump();
+			
+			return;
+		}
+
+		sock <<
+			responseJSON(
+				request.request_key,
+				QUERY_RESPONSE_STATUS::OK
+			).dump()
+		<< Response;
+
+		return;
+	}
+#pragma endregion
+
+	//polling
 }
-//------------------------------------------------------------------------------
 
-//------------------------------------------------------------------------------
-struct maker {
-	static std::string random_str_make(unsigned short key) {
-		std::string rand_str(10, '_');
-		for (auto& ch : rand_str) { ch = '0' + rand() % 10; }
-		return std::to_string(key) + "_" + rand_str;
-	}
-
-	static std::string make_std_string(const char* ch, size_t size) {
-		std::string res;
-		if (!size) return res;
-		res.resize(size);
-		char* buf = const_cast< char* >(res.c_str());
-		for (auto end = ch + size; ch < end; ch++, buf++) *buf = *ch;
-		return res;
-	}
-};
 //------------------------------------------------------------------------------
 void request_to_friend_sended(const int64_t& sender_user_id, const int64_t& receiver_user_id) {
 	add_task([sender_user_id, receiver_user_id](mysqlWrap& connection) {
@@ -442,6 +944,29 @@ void message_sended(int64_t chat_id, int64_t user_id, int64_t message_id) {
 void request_to_friend_accepted(const int64_t& user_id, const int64_t& requester_id, const int64_t& friend_chat_id) {
 	add_task([user_id, requester_id, friend_chat_id](mysqlWrap& connection) {
 
+	});
+}
+void chat_member_added(const int64_t& adder_user_id, const int64_t& chat_id, const int64_t& member_id) {
+	add_task([adder_user_id, chat_id, member_id](mysqlWrap& connection) {
+
+	});
+}
+void user_online(const int64_t& user_id, const time_t& time) {
+	add_task([user_id, time](mysqlWrap& connection) {
+		char query[100];
+		char *end;
+
+		end = strmov(const_cast< char* >(query), "CALL my_chat.USER_ONLINE(");
+		sprintf_s(end, sizeof(query) - (end - query), "%d", int(user_id));
+		end += strlen(end);
+		*end++ = ',';
+		sprintf_s(end, sizeof(query) - (end - query), "%d", int(time));
+		end += strlen(end);
+		*end++ = ')';
+
+		if (mysql_real_query(connection.get(), query, (unsigned int)(end - query))) throw connection.get_mysqlException(__FUNCTION__);
+
+		connection.clean_query();
 	});
 }
 //------------------------------------------------------------------------------
@@ -459,7 +984,7 @@ bool user::existUser(mysqlWrap& connection, const std::string& login) throw (mys
 
 	connection.clean_query();
 
-	return bool(mysql_num_rows(query_res.get()));
+	return bool(query_res && mysql_num_rows(query_res.get()));
 }
 bool user::regUser(mysqlWrap& connection, const std::string& login, const std::string& password) throw (mysqlException) {
 	char query[300], *end;
@@ -501,7 +1026,7 @@ bool user::authUser(mysqlWrap& connection, const std::string& login, const std::
 	auto query_res = connection.store_result();
 	connection.clean_query();
 
-	if (!mysql_num_rows(query_res.get())) return false;
+	if (!query_res || !mysql_num_rows(query_res.get())) return false;
 
 	MYSQL_ROW row = mysql_fetch_row(query_res.get());
 	int64_t user_id = atoll(row[0]);
@@ -513,7 +1038,7 @@ bool user::send_request_to_friend(mysqlWrap& connection, const int64_t& sender_u
 	char *end;
 	query.resize(message.size()*2 + 1 + 100);
 
-	end = strmov(const_cast< char* >(query.c_str()), "CALL SEND_REQUEST(");
+	end = strmov(const_cast< char* >(query.c_str()), "CALL my_chat.SEND_REQUEST(");
 	sprintf_s(end, 100 - (end - query.c_str()), "%d", int(sender_user_id));
 	end += strlen(end);
 	*end++ = ',';
@@ -530,7 +1055,7 @@ bool user::send_request_to_friend(mysqlWrap& connection, const int64_t& sender_u
 	auto query_res = connection.store_result();
 	connection.clean_query();
 
-	if (!mysql_num_rows(query_res.get())) return false;
+	if (!query_res || !mysql_num_rows(query_res.get())) return false;
 
 	request_to_friend_sended(sender_user_id, receiver_user_id);
 	return true;
@@ -540,7 +1065,7 @@ bool user::send_message(mysqlWrap& connection, const int64_t& user_id, const int
 	char *end;
 	query.resize(message.size()*2 + 1 + 100);
 
-	end = strmov(const_cast< char* >(query.c_str()), "CALL SEND_CHAT_MESSAGE(");
+	end = strmov(const_cast< char* >(query.c_str()), "CALL my_chat.SEND_CHAT_MESSAGE(");
 	sprintf_s(end, 100 - (end - query.c_str()), "%d", int(user_id));
 	end += strlen(end);
 	*end++ = ',';
@@ -557,7 +1082,7 @@ bool user::send_message(mysqlWrap& connection, const int64_t& user_id, const int
 	auto query_res = connection.store_result();
 	connection.clean_query();
 
-	if (!mysql_num_rows(query_res.get())) return false;
+	if (!query_res || !mysql_num_rows(query_res.get())) return false;
 	MYSQL_ROW row = mysql_fetch_row(query_res.get());
 	int64_t message_id = atoll(row[0]);
 
@@ -569,7 +1094,7 @@ bool user::set_user_str_param(mysqlWrap& connection, const std::string& PARAM_NA
 	char *end;
 	query.resize(PARAM_NAME.size() + param.size()*2 + 1 + 100);
 
-	end = strmov(const_cast< char* >(query.c_str()), "CALL SET_");
+	end = strmov(const_cast< char* >(query.c_str()), "CALL my_chat.SET_");
 	end = strmov(end, PARAM_NAME.c_str());
 	*end++ = '(';
 	sprintf_s(end, 100 - (end - query.c_str()), "%d", int(user_id));
@@ -594,7 +1119,7 @@ bool user::accept_request_for_friend(mysqlWrap& connection, const int64_t& user_
 	char query[100];
 	char *end;
 
-	end = strmov(const_cast< char* >(query), "CALL ACCEPT_REQUEST(");
+	end = strmov(const_cast< char* >(query), "CALL my_chat.ACCEPT_REQUEST(");
 	sprintf_s(end, sizeof(query) - (end - query), "%d", int(user_id));
 	end += strlen(end);
 	*end++ = ',';
@@ -607,7 +1132,7 @@ bool user::accept_request_for_friend(mysqlWrap& connection, const int64_t& user_
 	auto query_res = connection.store_result();
 	connection.clean_query();
 
-	if (!mysql_num_rows(query_res.get())) return false;
+	if (!query_res || !mysql_num_rows(query_res.get())) return false;
 	MYSQL_ROW row = mysql_fetch_row(query_res.get());
 	friend_chat_id = atoll(row[0]);
 
@@ -619,7 +1144,7 @@ bool user::create_chat(mysqlWrap& connection, const int64_t& user_id, const std:
 	char *end;
 	query.resize((chat_name.size() + chat_avatar.size())*2 + 1 + 100);
 
-	end = strmov(const_cast< char* >(query.c_str()), "CALL CREATE_CHAT(");
+	end = strmov(const_cast< char* >(query.c_str()), "CALL my_chat.CREATE_CHAT(");
 	sprintf_s(end, 100 - (end - query.c_str()), "%d", int(user_id));
 	end += strlen(end);
 	*end++ = ',';
@@ -637,9 +1162,66 @@ bool user::create_chat(mysqlWrap& connection, const int64_t& user_id, const std:
 	auto query_res = connection.store_result();
 	connection.clean_query();
 
-	if (!mysql_num_rows(query_res.get())) return false;
+	if (!query_res || !mysql_num_rows(query_res.get())) return false;
 	MYSQL_ROW row = mysql_fetch_row(query_res.get());
 	chat_id = atoll(row[0]);
+
+	return true;
+}
+bool user::add_chat_member(mysqlWrap& connection, const int64_t& adder_user_id, const int64_t& chat_id, const int64_t& user_id, CHAT_ACCESS access) throw (mysqlException) {
+	char query[150];
+	char *end;
+
+	end = strmov(const_cast< char* >(query), "CALL my_chat.ADD_MEMBER(");
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(adder_user_id));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(chat_id));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(user_id));
+	end += strlen(end);
+	*end++ = ',';
+	std::string str_access = to_string(access);
+	sprintf_s(end, sizeof(query) - (end - query), "%s", str_access.c_str());
+	end += strlen(end);
+	*end++ = ')';
+
+	if (mysql_real_query(connection.get(), query, (unsigned int)(end - query))) throw connection.get_mysqlException(__FUNCTION__);
+
+	auto query_res = connection.store_result();
+	connection.clean_query();
+
+	if (!query_res) return false;
+
+	chat_member_added(adder_user_id, chat_id, user_id);
+	return true;
+}
+bool user::set_chat_member_access(mysqlWrap& connection, const int64_t& setter_user_id, const int64_t& chat_id, const int64_t& member_user_id, CHAT_ACCESS access) throw (mysqlException) {
+	char query[150];
+	char *end;
+
+	end = strmov(const_cast< char* >(query), "CALL my_chat.SET_MEMBER_ACCESS(");
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(setter_user_id));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(chat_id));
+	end += strlen(end);
+	*end++ = ',';
+	sprintf_s(end, sizeof(query) - (end - query), "%d", int(member_user_id));
+	end += strlen(end);
+	*end++ = ',';
+	std::string str_access = to_string(access);
+	sprintf_s(end, sizeof(query) - (end - query), "%s", str_access.c_str());
+	end += strlen(end);
+	*end++ = ')';
+
+	if (mysql_real_query(connection.get(), query, (unsigned int)(end - query))) throw connection.get_mysqlException(__FUNCTION__);
+
+	auto query_res = connection.store_result();
+	connection.clean_query();
+
+	if (!query_res) return false;
 
 	return true;
 }
@@ -700,20 +1282,25 @@ bool user::init(mysqlWrap& connection, std::string& authResponse) {
 
 	context->individuals[connection_identifier] = user_context::individual_user_context(context.get());
 
-	json11::Json user_info = json11::Json::object{
-		{ "user_id", user_id },
-		{ "user_name", context->user_name },
-		{ "user_status", context->status },
-		{ "unix_time_last_tick", context->last_tick },
-		{ "avatar", std::move(avatar) }
-	};
+	min_user_infoJSON min_user_info(
+		user_id,
+		context->last_tick,
+		context->login,
+		context->user_name
+	);
 
-	json11::Json authInfo = json11::Json::object{
-		{ "user_info", std::move(user_info) },
-		{ "n_unread_chats" , context->n_unread_chats },
-		{ "n_requests", context->n_requests },
-		{ "connection_identifier", std::move(connection_identifier) }
-	};
+	user_infoJSON user_info(
+		std::move(min_user_info),
+		context->status,
+		std::move(avatar)
+	);
+
+	AuthResponse authInfo(
+		std::move(user_info),
+		context->n_unread_chats,
+		context->n_requests,
+		std::move(connection_identifier)
+	);
 
 	authResponse = authInfo.dump();
 
@@ -725,6 +1312,8 @@ bool user::is_online(const user_context::individual_user_key& key) {
 	auto iter = context->individuals.find(key);
 	if (iter == context->individuals.end()) return false;
 	iter->second.refresh_last_tick();
+	user_online(this - users(), iter->second.last_tick);
+	return true;
 }
 bool user::get_user_info(mysqlWrap& connection, std::string& user_info_Response) const throw (mysqlException) {
 	auto user_id = this - users();
@@ -770,7 +1359,6 @@ bool user::get_user_info(mysqlWrap& connection, std::string& user_info_Response)
 
 				MYSQL_ROW row = mysql_fetch_row(query_res.get());
 				auto length = mysql_fetch_lengths(query_res.get());
-
 				
 				log = maker::make_std_string(row[0], length[0]);
 				name = maker::make_std_string(row[1], length[1]);
@@ -785,13 +1373,18 @@ bool user::get_user_info(mysqlWrap& connection, std::string& user_info_Response)
 		}
 	}
 
-	json11::Json user_info = json11::Json::object{
-		{ "user_id", user_id },
-		{ "user_name", std::move(name) },
-		{ "user_status", std::move(status) },
-		{ "unix_time_last_tick", last_tick },
-		{ "avatar", std::move(avatar) }
-	};
+	min_user_infoJSON min_user_info(
+		user_id,
+		last_tick,
+		std::move(log),
+		std::move(name)
+	);
+
+	user_infoJSON user_info(
+		std::move(min_user_info),
+		std::move(status),
+		std::move(avatar)
+	);
 
 	user_info_Response = user_info.dump();
 
@@ -825,12 +1418,12 @@ bool user::get_user_last_tick(mysqlWrap& connection, std::string& user_last_tick
 		}
 	} else last_tick = context->last_tick;
 
-	json11::Json user_info = json11::Json::object{
-		{ "user_id", user_id },
-		{ "unix_time_last_tick", last_tick }
-	};
+	user_last_tickJSON user_last_tick(
+		user_id,
+		last_tick
+	);
 
-	user_last_tick_Response = user_info.dump();
+	user_last_tick_Response = user_last_tick.dump();
 
 	return true;
 }

@@ -4,6 +4,7 @@
 #include <My\thread_pool.h>
 #include "mysqlWrap.h"
 #include "Log.h"
+#include "consts.h"
 #include <iostream>
 #include <map>
 #include <list>
@@ -68,9 +69,11 @@ public:
 	static bool set_avatar(mysqlWrap& connection, const int64_t& user_id, const std::string& avatar) throw (mysqlException);
 	static bool accept_request_for_friend(mysqlWrap& connection, const int64_t& user_id, const int64_t& requester_id, int64_t& friend_chat_id) throw (mysqlException);
 	static bool create_chat(mysqlWrap& connection, const int64_t& user_id, const std::string& chat_name, const std::string& chat_avatar, int64_t& chat_id) throw (mysqlException);
+	static bool add_chat_member(mysqlWrap& connection, const int64_t& adder_user_id, const int64_t& chat_id, const int64_t& user_id, CHAT_ACCESS access) throw (mysqlException);
+	static bool set_chat_member_access(mysqlWrap& connection, const int64_t& setter_user_id, const int64_t& chat_id, const int64_t& member_user_id, CHAT_ACCESS access) throw (mysqlException);
 	
-	bool user::get_user_info(mysqlWrap& connection, std::string& user_info_Response) const throw (mysqlException);
-	bool user::get_user_last_tick(mysqlWrap& connection, std::string& user_last_tick_Response) const throw (mysqlException);
+	bool get_user_info(mysqlWrap& connection, std::string& user_info_Response) const throw (mysqlException);
+	bool get_user_last_tick(mysqlWrap& connection, std::string& user_last_tick_Response) const throw (mysqlException);
 
 	user();
 	~user();
