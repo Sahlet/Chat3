@@ -5,7 +5,7 @@
 #include "mysqlWrap.h"
 #include "Log.h"
 #include "consts.h"
-#include <iostream>
+#include <strstream>
 #include <map>
 #include <list>
 
@@ -85,6 +85,7 @@ public:
 extern const unsigned int max_user_count;
 user* users();
 void add_task(std::function< void(mysqlWrap& connection) > funk);
+void add_task(My::WinSocket sock, std::function< void(My::WinSocket sock, mysqlWrap& connection) > funk);
 
 void test(std::string login, std::string password = "");
 

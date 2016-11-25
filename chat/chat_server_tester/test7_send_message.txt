@@ -1,0 +1,30 @@
+{
+"request_key": 1,
+"cmd": "send_message"
+}
+_send_;
+{
+"user_id": 1,
+"connection_identifier": "0_1740948824"
+}
+_send_;
+{
+"chat_id": 1,
+"message": "HI! How are you?"
+}
+_send_;_read_;
+{
+"request_key": 1,
+"cmd": "send_message"
+}
+_send_;
+{
+"user_id": 1,
+"connection_identifier": "0_1740948824"
+}
+_send_;
+{
+"chat_id": 1,
+"message": "I have some work for you."
+}
+_send_;_read_;

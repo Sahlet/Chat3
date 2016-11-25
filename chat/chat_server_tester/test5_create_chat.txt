@@ -1,0 +1,15 @@
+{
+"request_key": 1,
+"cmd": "create_chat"
+}
+_send_;
+{
+"user_id": 1,
+"connection_identifier": "0_1740948824"
+}
+_send_;
+{
+"chat_name": "test_chat",
+"chat_avatar": ""
+}
+_send_;_read_;

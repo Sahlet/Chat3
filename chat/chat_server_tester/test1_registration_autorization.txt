@@ -1,0 +1,20 @@
+{
+"request_key": 1,
+"cmd": "registration"
+}
+_send_;
+{
+"login": "login1",
+"password": "password1"
+}
+_send_;_read_;
+{
+"request_key": 1,
+"cmd": "authorization"
+}
+_send_;
+{
+"login": "login1",
+"password": "password1"
+}
+_send_;_read_;

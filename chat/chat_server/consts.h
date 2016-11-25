@@ -43,3 +43,5 @@ command comand_bite_interpretation(const char* cmd);
 
 //максимальное количество байт для логина, максимальное количество байт для пароля.
 const int max_login_len = 40, max_password_len = 40;
+
+#define END_OF_QUERY_PROCESSING "___END_OF_QUERY_PROCESSING___"

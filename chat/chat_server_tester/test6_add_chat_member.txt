@@ -1,0 +1,16 @@
+{
+"request_key": 1,
+"cmd": "add_chat_member"
+}
+_send_;
+{
+"user_id": 1,
+"connection_identifier": "0_1740948824"
+}
+_send_;
+{
+"chat_id": 2,
+"user_id": 2,
+"chat_access": "'p'"
+}
+_send_;_read_;

@@ -1,4 +1,5 @@
 #include "query_processing.h"
+#include <iostream>
 
 using namespace My;
 using namespace std;
@@ -28,13 +29,35 @@ void add_task(std::function< void(mysqlWrap& connection) > funk) {
 				ex.get_errorCode() == CR_INVALID_CONN_HANDLE || // Invalid connection handle
 				ex.get_errorCode() == CR_SERVER_LOST_EXTENDED // Lost connection to MySQL server
 				) {
-				cerr << ex;
+				std::strstream str;
+				str << ex;
+				LOGE(str.str());
 				connection = mysqlWrap(BASEhost.c_str(), BASEport, BASEuser.c_str(), BASEpassword.c_str());
 			}
 			else throw;
 		}
 	});
 }
+void add_task(WinSocket sock, std::function< void(WinSocket sock, mysqlWrap& connection) > funk) {
+	struct _f_ {
+		WinSocket sock;
+		std::function< void(WinSocket sock, mysqlWrap& connection) > funk;
+		_f_(WinSocket sock, std::function< void(WinSocket sock, mysqlWrap& connection) > funk) : sock(std::move(sock)), funk(std::move(funk)) {}
+		_f_(const _f_& f) = default;
+		_f_(_f_&& f) = default;
+		void operator()(mysqlWrap& connection) {
+			try {
+				funk(std::move(sock), connection);
+			} catch (const WinSocketException& ex) {
+				std::strstream str;
+				str << ex;
+				LOGE(str.str());
+			}
+		}
+	};
+	add_task(_f_(sock, funk));
+}
+
 
 int main(int argc, char *argv[]) {
 	LOG_FILES::out = stdout;
@@ -65,7 +88,7 @@ int main(int argc, char *argv[]) {
 
 			mysqlWrap test_connection(BASEhost.c_str(), BASEport, BASEuser.c_str(), BASEpassword.c_str());
 
-			cout << "connected.\n";
+			LOGI("connected.\n");
 		}
 		
 #pragma endregion
@@ -118,8 +141,8 @@ int main(int argc, char *argv[]) {
 			::pool = &pool;
 
 			//pool.add_task([] { test("l1"); });
-			pool.add_task([] { test("l1", "p"); });
-			pool.add_task([] { test("l1", "p"); });
+			//pool.add_task([] { test("l1", "p"); });
+			//pool.add_task([] { test("l1", "p"); });
 
 			long long accepted = 0;
 			while (!quit) {
@@ -140,26 +163,24 @@ int main(int argc, char *argv[]) {
 					if (errorCode == WSAEWOULDBLOCK || errorCode == WSAECONNABORTED) continue;
 					else throw;
 				}
-				cout << "accepted " << ++accepted << endl;
+				++accepted;
+				LOGI("accepted %d\n", accepted);
 				WinSocket socket = std::move(*socket_guard);
-				add_task([socket](mysqlWrap& connection) {
-						try {
-							query_processor(socket, connection);
-						} catch (const WinSocketException& ex) {
-							cerr << ex;
-						}
-					}
-				);
+				add_task(socket, query_processor);
 			}
 		} catch (...) {
-			cout << "server crashed.\n";
+			LOGI("server crashed.\n");
 			throw;
 		}
 	} catch (const Exception& ex) {
-		cerr << ex;
+		std::strstream str;
+		str << ex;
+		LOGE(str.str());
 		return ex.get_errorCode();
 	} catch (const std::exception& ex) {
-		cerr << "ERROR: " << ex.what() << endl;
+		std::strstream str;
+		str << "ERROR: " << ex.what() << endl;
+		LOGE(str.str());
 		return 1;
 	}
 	return 0;

@@ -276,7 +276,7 @@ public:
 
 class JsonNull final : public Value<Json::NUL, std::nullptr_t> {
 public:
-    JsonNull() : Value(nullptr) {}
+    JsonNull() : Value(std::nullptr_t(nullptr)) {}
 };
 
 /* * * * * * * * * * * * * * * * * * * *

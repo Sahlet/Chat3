@@ -1,0 +1,16 @@
+{
+"request_key": 1,
+"cmd": "get_messages"
+}
+_send_;
+{
+"user_id": 2,
+"connection_identifier": "0_5517115276"
+}
+_send_;
+{
+"chat_id": 1,
+"offset": 0,
+"count": 100
+}
+_send_;_read_;

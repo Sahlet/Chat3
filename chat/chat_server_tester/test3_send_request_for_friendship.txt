@@ -1,0 +1,15 @@
+{
+"request_key": 1,
+"cmd": "send_request_for_friendship"
+}
+_send_;
+{
+"user_id": 2,
+"connection_identifier": "0_5517115276"
+}
+_send_;
+{
+"user_id": 1,
+"message": "hello"
+}
+_send_;_read_;

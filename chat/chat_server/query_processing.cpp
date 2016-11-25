@@ -73,6 +73,11 @@ void test(std::string login, std::string password) {
 	responseJSON response;
 	response.parse(response_str);
 
+	if (response.status == QUERY_RESPONSE_STATUS::ERR) {
+		LOGE("test function error: %s\n\n", response.cause.c_str());
+		return;
+	}
+
 	if (password_size) {
 		s1 >> response_str;
 		AuthResponse authResponse;
@@ -399,11 +404,11 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 	std::string request_str;
 	sock >> request_str;
 	server_Request request;
-	if (!request.parse(request_str)) return;
+	if (!request_str.size() || !request.parse(request_str)) return;
 
 	const command cmd = request.cmd;
 	if (command::unknown == cmd) {
-		std::cout << "unknown command" << std::endl;
+		LOGE("unknown command\n");
 		return;
 	}
 
@@ -450,6 +455,24 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 		}
 	};
 
+	struct add_task_guard {
+		bool add = false;
+		WinSocket& sock;
+		add_task_guard(WinSocket& sock) : sock(sock) {}
+		~add_task_guard() {
+			if (add) {
+				try {
+					sock << END_OF_QUERY_PROCESSING;
+					add_task(std::move(sock), query_processor);
+				} catch (const My::WinSocketException& ex) {
+					std::strstream str;
+					str << ex;
+					LOGE(str.str());
+				}
+			}
+		}
+	} add_task(sock);
+
 #pragma region registration
 	if (command::registration == cmd) {
 		sock >> request_str;
@@ -466,7 +489,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 				QUERY_RESPONSE_STATUS::ERR,
 				"user with this loigin already exists"
 			).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -476,7 +499,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 			request.request_key,
 			QUERY_RESPONSE_STATUS::OK
 		).dump();
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion
@@ -497,7 +520,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 				QUERY_RESPONSE_STATUS::ERR,
 				"user with this loigin and password is not exist"
 			).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -507,7 +530,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 			QUERY_RESPONSE_STATUS::OK
 		).dump()
 		<< authResponse;
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion
@@ -530,7 +553,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 					QUERY_RESPONSE_STATUS::ERR,
 					"could not add request to friend"
 				).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -539,7 +562,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 				request.request_key,
 				QUERY_RESPONSE_STATUS::OK
 			).dump();
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion
@@ -556,7 +579,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 					QUERY_RESPONSE_STATUS::ERR,
 					"could not send message"
 				).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -565,7 +588,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 				request.request_key,
 				QUERY_RESPONSE_STATUS::OK
 			).dump();
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion
@@ -580,7 +603,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 					QUERY_RESPONSE_STATUS::ERR,
 					std::string("could not send ") + (command::set_status == cmd ? "status" : "avatar")
 				).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -589,7 +612,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 				request.request_key,
 				QUERY_RESPONSE_STATUS::OK
 			).dump();
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion
@@ -608,7 +631,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 					QUERY_RESPONSE_STATUS::ERR,
 					"could not accept request for friendship"
 				).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -622,7 +645,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 			json11::Json(json11::Json::object{
 				{ "chat_id", friend_chat_id }
 			}).dump();
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion
@@ -639,7 +662,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 					QUERY_RESPONSE_STATUS::ERR,
 					"too long chat name"
 				).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -651,7 +674,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 					QUERY_RESPONSE_STATUS::ERR,
 					"could not accept creat chat"
 				).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -664,7 +687,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 		json11::Json(json11::Json::object{
 			{ "chat_id", chat_id }
 		}).dump();
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion
@@ -682,7 +705,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 					QUERY_RESPONSE_STATUS::ERR,
 					"could not add chat member"
 				).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -691,7 +714,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 				request.request_key,
 				QUERY_RESPONSE_STATUS::OK
 			).dump();
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion
@@ -709,7 +732,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 					QUERY_RESPONSE_STATUS::ERR,
 					"could not set chat member access"
 				).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -718,7 +741,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 				request.request_key,
 				QUERY_RESPONSE_STATUS::OK
 			).dump();
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion
@@ -737,7 +760,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 					QUERY_RESPONSE_STATUS::ERR,
 					"could not get user info"
 				).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -747,7 +770,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 				QUERY_RESPONSE_STATUS::OK
 			).dump()
 		<< user_info_Response;
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion
@@ -766,7 +789,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 					QUERY_RESPONSE_STATUS::ERR,
 					"could not get user last_tick"
 				).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -776,7 +799,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 				QUERY_RESPONSE_STATUS::OK
 			).dump()
 		<< user_last_tick_Response;
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion
@@ -796,7 +819,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 					QUERY_RESPONSE_STATUS::ERR,
 					"could not get chat records"
 				).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -806,7 +829,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 				QUERY_RESPONSE_STATUS::OK
 			).dump()
 		<< Response;
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion
@@ -825,7 +848,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 					QUERY_RESPONSE_STATUS::ERR,
 					"could not get my records"
 				).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -835,7 +858,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 				QUERY_RESPONSE_STATUS::OK
 			).dump()
 		<< Response;
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion
@@ -854,7 +877,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 					QUERY_RESPONSE_STATUS::ERR,
 					"could not get user records"
 				).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -864,7 +887,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 				QUERY_RESPONSE_STATUS::OK
 			).dump()
 		<< Response;
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion
@@ -883,7 +906,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 					QUERY_RESPONSE_STATUS::ERR,
 					"could not find my records"
 				).dump();
-
+			add_task.add = true;
 			return;
 		}
 
@@ -893,7 +916,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 				QUERY_RESPONSE_STATUS::OK
 			).dump()
 		<< Response;
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion
@@ -912,7 +935,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 					QUERY_RESPONSE_STATUS::ERR,
 					"could not find user friends"
 				).dump();
-			
+			add_task.add = true;
 			return;
 		}
 
@@ -922,7 +945,7 @@ void query_processor(WinSocket sock, mysqlWrap& connection) throw (My::Exception
 				QUERY_RESPONSE_STATUS::OK
 			).dump()
 		<< Response;
-
+		add_task.add = true;
 		return;
 	}
 #pragma endregion

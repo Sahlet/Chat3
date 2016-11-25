@@ -8,7 +8,7 @@ bool JSONReader::parse(const std::string& data) {
 	std::string err;
 	auto obj = json11::Json::parse(data, err);
 	if (err.size()) {
-		LOGE("json error: %s", err.c_str());
+		LOGE("json error: %s\n", err.c_str());
 		return false;
 	}
 	on_json(obj);

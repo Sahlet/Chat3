@@ -1,0 +1,14 @@
+{
+"request_key": 1,
+"cmd": "accept_request_for_friendship"
+}
+_send_;
+{
+"user_id": 1,
+"connection_identifier": "0_1740948824"
+}
+_send_;
+{
+"user_id": 2
+}
+_send_;_read_;
